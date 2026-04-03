@@ -41,10 +41,13 @@ npm install
 ### 2. Set Up Supabase
 
 1. Create a new project at [supabase.com](https://supabase.com)
-2. Go to **SQL Editor** and run the migration:
-   - Copy contents of `supabase/migrations/001_initial_schema.sql`
-   - Paste and run in the SQL Editor
-3. Go to **Settings > API** and copy your:
+2. Go to **SQL Editor** and run the migrations in order:
+   - Copy contents of `supabase/migrations/001_initial_schema.sql` and run it.
+   - Copy contents of `supabase/migrations/002_fix_rls_recursion.sql` and run it.
+3. Go to **Authentication > Providers** and configure:
+   - **Google**: Add your Client ID & Secret from Google Cloud Console.
+   - **GitHub**: Add your Client ID & Secret from GitHub Developer Settings.
+4. Go to **Settings > API** and copy your:
    - Project URL
    - `anon` public key
    - `service_role` key (for backend)
@@ -55,7 +58,7 @@ npm install
 ```
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
-VITE_API_URL=http://localhost:3001
+VITE_API_URL=http://127.0.0.1:3001
 ```
 
 **Backend** (`backend/.env`):
@@ -83,18 +86,18 @@ npm run dev
 ```
 
 Frontend: http://localhost:5173
-Backend: http://localhost:3001
+Backend: http://127.0.0.1:3001
 
 ## Features
 
-- 🔐 **Authentication** — Email/password with Supabase Auth
-- 📁 **Workspaces** — Create, manage, invite collaborators
+- 🔐 **Authentication** — Google & GitHub OAuth via Supabase
+- 📁 **Workspaces** — Create, manage, invite collaborators securely
 - 📝 **Monaco Editor** — Full VS Code editing experience
 - 🗂️ **File System** — Create, rename, delete files & folders
-- ▶️ **Code Execution** — Run code in 10+ languages via Judge0
+- ▶️ **Code Execution** — Run code in 10+ languages via Judge0 (Securely Proxied)
 - 👥 **Real-Time Collaboration** — Live sync via Supabase Realtime
 - 🟢 **Presence** — See who's online in your workspace
-- 🔒 **Row-Level Security** — Secure data isolation per workspace
+- 🔒 **Row-Level Security** — Secure data isolation per workspace bypassing RLS recursion
 
 ## Supported Languages
 
