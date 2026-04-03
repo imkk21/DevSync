@@ -5,7 +5,7 @@ export const compilerService = {
   async run(sourceCode, languageId, stdin = '') {
     const { data: { session } } = await supabase.auth.getSession();
     
-    return axios.post('/api/compiler/run', {
+    return axios.post(`${import.meta.env.VITE_API_URL || ''}/api/compiler/run`, {
       source_code: sourceCode,
       language_id: languageId,
       stdin,
@@ -17,6 +17,6 @@ export const compilerService = {
   },
 
   async getLanguages() {
-    return axios.get('/api/compiler/languages');
+    return axios.get(`${import.meta.env.VITE_API_URL || ''}/api/compiler/languages`);
   },
 };
