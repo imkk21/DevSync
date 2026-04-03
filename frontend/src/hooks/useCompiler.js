@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import axios from 'axios';
 import useEditorStore from '../store/editorStore';
-import { compilerService } from '../services/compilerService';
 
 const LANGUAGES = [
   { value: 'javascript', judge0Id: 63 },
@@ -28,7 +27,12 @@ export default function useCompiler() {
     setOutput(null);
 
     try {
-      const response = await compilerService.run(editorContent, lang.judge0Id, stdin);
+      const response = await axios.post('/api/compiler/run', {
+        source_code: editorContent,
+        language_id: lang.judge0Id,
+        stdin,
+      });
+
       setOutput(response.data);
     } catch (error) {
       setOutput({
