@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { HiPlay, HiStop, HiTerminal, HiChevronUp, HiChevronDown, HiClock, HiChip } from 'react-icons/hi';
 import useEditorStore from '../../store/editorStore';
-import axios from 'axios';
+import { compilerService } from '../../services/compilerService';
 
 const LANGUAGES = [
   { value: 'javascript', label: 'JavaScript', judge0Id: 63 },
@@ -30,11 +30,7 @@ export default function OutputPanel() {
     setActiveTab('output');
 
     try {
-      const response = await axios.post('/api/compiler/run', {
-        source_code: editorContent,
-        language_id: currentLang.judge0Id,
-        stdin: stdin,
-      });
+      const response = await compilerService.run(editorContent, currentLang.judge0Id, stdin);
 
       setOutput(response.data);
     } catch (error) {

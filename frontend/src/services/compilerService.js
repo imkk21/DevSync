@@ -1,11 +1,18 @@
 import axios from 'axios';
+import { supabase } from '../lib/supabase';
 
 export const compilerService = {
   async run(sourceCode, languageId, stdin = '') {
+    const { data: { session } } = await supabase.auth.getSession();
+    
     return axios.post('/api/compiler/run', {
       source_code: sourceCode,
       language_id: languageId,
       stdin,
+    }, {
+      headers: {
+        Authorization: `Bearer ${session?.access_token}`
+      }
     });
   },
 
