@@ -27,7 +27,7 @@ export default function useCompiler() {
     setOutput(null);
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || '';
+      const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
       const response = await axios.post(`${API_URL}/api/compiler/run`, {
         source_code: editorContent,
         language_id: lang.judge0Id,

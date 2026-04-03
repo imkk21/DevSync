@@ -64,7 +64,7 @@ const useWorkspaceStore = create((set, get) => ({
     set({ loading: true, error: null });
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const API_URL = import.meta.env.VITE_API_URL || '';
+      const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
       const response = await fetch(`${API_URL}/api/workspaces`, {
         method: 'POST',
         headers: {
@@ -114,7 +114,7 @@ const useWorkspaceStore = create((set, get) => ({
   inviteMember: async (workspaceId, email, role = 'editor') => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const API_URL = import.meta.env.VITE_API_URL || '';
+      const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
       const response = await fetch(`${API_URL}/api/workspaces/${workspaceId}/invite`, {
         method: 'POST',
         headers: {
