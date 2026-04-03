@@ -200,23 +200,27 @@ export async function inviteMember(req, res) {
     }
 
     // Find user by email
-    const { data: profile } = await supabaseAdmin
+    const { data: profile, error: profileErr } = await supabaseAdmin
       .from('profiles')
       .select('id')
       .eq('email', email)
-      .single();
+      .maybeSingle();
+
+    if (profileErr) throw profileErr;
 
     if (!profile) {
       return res.status(404).json({ message: 'User not found with that email' });
     }
 
     // Check if already a member
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: existingErr } = await supabaseAdmin
       .from('workspace_members')
       .select('id')
       .eq('workspace_id', id)
       .eq('user_id', profile.id)
-      .single();
+      .maybeSingle();
+
+    if (existingErr) throw existingErr;
 
     if (existing) {
       return res.status(409).json({ message: 'User is already a member' });

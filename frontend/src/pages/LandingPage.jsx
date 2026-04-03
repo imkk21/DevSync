@@ -107,7 +107,7 @@ export default function LandingPage() {
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-slide-up animate-delay-200">
-              <Link to="/register">
+              <Link to="/login">
                 <Button size="lg" className="text-base px-10">
                   <HiPlay size={20} />
                   Start Coding Free
@@ -248,7 +248,7 @@ export default function LandingPage() {
           <p className="text-surface-400 mb-8 max-w-lg mx-auto">
             Join DevSync today and experience the future of collaborative development. Free forever.
           </p>
-          <Link to="/register">
+          <Link to="/login">
             <Button size="lg" className="text-base px-12 animate-glow">
               Get Started — It's Free
             </Button>

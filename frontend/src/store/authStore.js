@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
+import { authService } from '../services/authService';
 
 const useAuthStore = create((set, get) => ({
   user: null,
@@ -16,10 +17,19 @@ const useAuthStore = create((set, get) => ({
       .eq('id', user.id)
       .single();
 
-    if (existing) return existing;
+    const idealName = user.user_metadata?.full_name || user.user_metadata?.name || user.user_metadata?.display_name || user.email?.split('@')[0] || 'User';
+    
+    if (existing) {
+      if ((existing.display_name === user.email?.split('@')[0] || existing.display_name === user.email) && idealName !== existing.display_name) {
+        // Fix legacy profiles that incorrectly used the email prefix
+        const { data: updated } = await supabase.from('profiles').update({ display_name: idealName }).eq('id', user.id).select().single();
+        return updated || existing;
+      }
+      return existing;
+    }
 
     // Profile missing — create it
-    const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'User';
+    const displayName = user.user_metadata?.full_name || user.user_metadata?.name || user.user_metadata?.display_name || user.email?.split('@')[0] || 'User';
     const { data: created } = await supabase
       .from('profiles')
       .upsert({
@@ -67,28 +77,11 @@ const useAuthStore = create((set, get) => ({
     }
   },
 
-  signUp: async (email, password, displayName) => {
+  signInWithGoogle: async () => {
     set({ loading: true, error: null });
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { display_name: displayName },
-        },
-      });
-
+      const { data, error } = await authService.signInWithGoogle();
       if (error) throw error;
-
-      if (data.user) {
-        await supabase.from('profiles').upsert({
-          id: data.user.id,
-          email: data.user.email,
-          display_name: displayName,
-        });
-      }
-
-      set({ loading: false });
       return { data, error: null };
     } catch (error) {
       set({ error: error.message, loading: false });
@@ -96,16 +89,11 @@ const useAuthStore = create((set, get) => ({
     }
   },
 
-  signIn: async (email, password) => {
+  signInWithGithub: async () => {
     set({ loading: true, error: null });
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
+      const { data, error } = await authService.signInWithGithub();
       if (error) throw error;
-      set({ loading: false });
       return { data, error: null };
     } catch (error) {
       set({ error: error.message, loading: false });
@@ -114,9 +102,15 @@ const useAuthStore = create((set, get) => ({
   },
 
   signOut: async () => {
-    set({ loading: true });
-    await supabase.auth.signOut();
+    // Eagerly clear the state so the UI logs out instantly
     set({ user: null, session: null, profile: null, loading: false });
+    
+    // Process the remote signout in the background
+    try {
+      await authService.signOut();
+    } catch (err) {
+      console.error('Sign out error:', err);
+    }
   },
 
   clearError: () => set({ error: null }),

@@ -105,7 +105,11 @@ export default function EditorPage() {
   );
 
   const handleInvite = async (email, role) => {
-    return await inviteMember(workspaceId, email, role);
+    const result = await inviteMember(workspaceId, email, role);
+    if (!result?.error) {
+      await fetchWorkspace(workspaceId);
+    }
+    return result;
   };
 
   const handleSave = () => {

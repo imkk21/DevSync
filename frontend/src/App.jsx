@@ -3,7 +3,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import useAuthStore from './store/authStore';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import EditorPage from './pages/EditorPage';
 import LoadingSpinner from './components/ui/LoadingSpinner';
@@ -61,13 +60,6 @@ export default function App() {
             <LoginPage />
           </PublicRoute>
         } />
-
-        <Route path="/register" element={
-          <PublicRoute>
-            <RegisterPage />
-          </PublicRoute>
-        } />
-
         <Route path="/dashboard" element={
           <ProtectedRoute>
             <DashboardPage />

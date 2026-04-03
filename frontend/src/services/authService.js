@@ -1,16 +1,22 @@
 import { supabase } from '../lib/supabase';
 
 export const authService = {
-  async signUp(email, password, displayName) {
-    return supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { display_name: displayName } },
+  async signInWithGoogle() {
+    return supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`
+      }
     });
   },
 
-  async signIn(email, password) {
-    return supabase.auth.signInWithPassword({ email, password });
+  async signInWithGithub() {
+    return supabase.auth.signInWithOAuth({
+      provider: 'github',
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`
+      }
+    });
   },
 
   async signOut() {
