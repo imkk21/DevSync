@@ -15,6 +15,7 @@ import OutputPanel from '../components/editor/OutputPanel';
 import PresenceBar from '../components/editor/PresenceBar';
 import InviteMemberModal from '../components/workspace/InviteMemberModal';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
+import { socketService } from '../services/socketService';
 import { supabase } from '../lib/supabase';
 
 export default function EditorPage() {
@@ -51,103 +52,53 @@ export default function EditorPage() {
     init();
   }, [workspaceId, fetchWorkspace, fetchFiles]);
 
-  // Set up realtime presence
+  // Set up Socket.io for realtime
   useEffect(() => {
     if (!user || !workspaceId) return;
 
-    console.log('🔌 Connecting to realtime channel:', `workspace:${workspaceId}`);
+    const userObj = {
+      id: user.id,
+      display_name: profile?.display_name || user.email,
+      email: user.email,
+    };
 
-    const channel = supabase.channel(`workspace:${workspaceId}`, {
-      config: {
-        presence: {
-          key: user.id,
-        },
-      },
+    const socket = socketService.connect(workspaceId, userObj);
+
+    socketService.onPresenceUpdate((users) => {
+      setOnlineUsers(users);
     });
 
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState();
-        const users = Object.values(state).flat().map((u) => ({
-          id: u.user_id,
-          display_name: u.display_name,
-          email: u.email,
-        }));
-        setOnlineUsers(users);
-      })
-      // Database change listener (CDC) — The "Source of Truth"
-      .on('postgres_changes', { 
-        event: 'UPDATE', 
-        schema: 'public', 
-        table: 'files',
-        filter: `workspace_id=eq.${workspaceId}` 
-      }, (payload) => {
-        const currentActiveFile = activeFileRef.current;
-        
-        // If the updated file is the one we have open, and it wasn't us who saved it
-        if (payload.new.id === currentActiveFile?.id) {
-          // Note: We don't have user_id on the record directly in some schemas, 
-          // but we can check if the content actually changed to avoid unnecessary updates
-          if (payload.new.content !== useEditorStore.getState().editorContent) {
-            useEditorStore.getState().setEditorContent(payload.new.content);
-          }
-        }
-      })
-      // Broadcast listener (Ephemeral) — Faster but less reliable
-      .on('broadcast', { event: 'code-change' }, ({ payload }) => {
-        const currentActiveFile = activeFileRef.current;
-        const currentUser = userRef.current;
-
-        // Apply remote changes
-        if (payload.user_id !== currentUser?.id && payload.file_id === currentActiveFile?.id) {
-          useEditorStore.getState().setEditorContent(payload.content);
-        }
-      })
-      .subscribe(async (status) => {
-        console.log(`📡 Realtime status [${workspaceId}]:`, status);
-        if (status === 'SUBSCRIBED') {
-          await channel.track({
-            user_id: user.id,
-            display_name: profile?.display_name || user.email,
-            email: user.email,
-            online_at: new Date().toISOString(),
-          });
-        }
-      });
-
-    channelRef.current = channel;
-
-    return () => {
-      console.log('🔌 Disconnecting from realtime channel');
-      channel.unsubscribe();
-    };
-  }, [user?.id, workspaceId, profile?.display_name]);
-
-  // Broadcast content changes
-  const handleContentChange = useCallback(
-    async (content) => {
+    socketService.onCodeUpdate(({ fileId, content, userId }) => {
       const currentActiveFile = activeFileRef.current;
       const currentUser = userRef.current;
 
-      if (channelRef.current && currentActiveFile) {
-        const response = await channelRef.current.send({
-          type: 'broadcast',
-          event: 'code-change',
-          payload: {
-            user_id: currentUser?.id,
-            file_id: currentActiveFile.id,
-            content,
-          },
-        });
+      // Only apply if it's the current file and not from the current user
+      if (fileId === currentActiveFile?.id && userId !== currentUser?.id) {
+        useEditorStore.getState().setEditorContent(content);
+      }
+    });
 
-        if (response !== 'ok') {
-          console.error('❌ Broadcast delivery failed:', response);
-        } else {
-          // console.log('✅ Broadcast sent');
-        }
+    return () => {
+      socketService.disconnect();
+    };
+  }, [user?.id, workspaceId, profile?.display_name]);
+
+  // Broadcast content changes via Socket.io
+  const handleContentChange = useCallback(
+    (content) => {
+      const currentActiveFile = activeFileRef.current;
+      const currentUser = userRef.current;
+
+      if (currentActiveFile && currentUser) {
+        socketService.emitCodeChange(
+          workspaceId,
+          currentActiveFile.id,
+          content,
+          currentUser.id
+        );
       }
     },
-    []
+    [workspaceId]
   );
 
   const handleInvite = async (email, role) => {
