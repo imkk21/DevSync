@@ -75,6 +75,25 @@ export default function EditorPage() {
         }));
         setOnlineUsers(users);
       })
+      // Database change listener (CDC) — The "Source of Truth"
+      .on('postgres_changes', { 
+        event: 'UPDATE', 
+        schema: 'public', 
+        table: 'files',
+        filter: `workspace_id=eq.${workspaceId}` 
+      }, (payload) => {
+        const currentActiveFile = activeFileRef.current;
+        
+        // If the updated file is the one we have open, and it wasn't us who saved it
+        if (payload.new.id === currentActiveFile?.id) {
+          // Note: We don't have user_id on the record directly in some schemas, 
+          // but we can check if the content actually changed to avoid unnecessary updates
+          if (payload.new.content !== useEditorStore.getState().editorContent) {
+            useEditorStore.getState().setEditorContent(payload.new.content);
+          }
+        }
+      })
+      // Broadcast listener (Ephemeral) — Faster but less reliable
       .on('broadcast', { event: 'code-change' }, ({ payload }) => {
         const currentActiveFile = activeFileRef.current;
         const currentUser = userRef.current;
