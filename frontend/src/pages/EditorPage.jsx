@@ -106,20 +106,29 @@ export default function EditorPage() {
 
   // Broadcast content changes
   const handleContentChange = useCallback(
-    (content) => {
-      if (channelRef.current && activeFile) {
-        channelRef.current.send({
+    async (content) => {
+      const currentActiveFile = activeFileRef.current;
+      const currentUser = userRef.current;
+
+      if (channelRef.current && currentActiveFile) {
+        const response = await channelRef.current.send({
           type: 'broadcast',
           event: 'code-change',
           payload: {
-            user_id: user?.id,
-            file_id: activeFile.id,
+            user_id: currentUser?.id,
+            file_id: currentActiveFile.id,
             content,
           },
         });
+
+        if (response !== 'ok') {
+          console.error('❌ Broadcast delivery failed:', response);
+        } else {
+          // console.log('✅ Broadcast sent');
+        }
       }
     },
-    [activeFile, user]
+    []
   );
 
   const handleInvite = async (email, role) => {
