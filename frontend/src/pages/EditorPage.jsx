@@ -28,6 +28,17 @@ export default function EditorPage() {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const channelRef = useRef(null);
+  const activeFileRef = useRef(activeFile);
+  const userRef = useRef(user);
+
+  // Keep refs in sync
+  useEffect(() => {
+    activeFileRef.current = activeFile;
+  }, [activeFile]);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   // Fetch workspace and files
   useEffect(() => {
@@ -43,6 +54,8 @@ export default function EditorPage() {
   // Set up realtime presence
   useEffect(() => {
     if (!user || !workspaceId) return;
+
+    console.log('🔌 Connecting to realtime channel:', `workspace:${workspaceId}`);
 
     const channel = supabase.channel(`workspace:${workspaceId}`, {
       config: {
@@ -63,12 +76,16 @@ export default function EditorPage() {
         setOnlineUsers(users);
       })
       .on('broadcast', { event: 'code-change' }, ({ payload }) => {
-        // Apply remote changes (basic approach — for full CRDT, integrate Yjs)
-        if (payload.user_id !== user.id && payload.file_id === activeFile?.id) {
+        const currentActiveFile = activeFileRef.current;
+        const currentUser = userRef.current;
+
+        // Apply remote changes
+        if (payload.user_id !== currentUser?.id && payload.file_id === currentActiveFile?.id) {
           useEditorStore.getState().setEditorContent(payload.content);
         }
       })
       .subscribe(async (status) => {
+        console.log(`📡 Realtime status [${workspaceId}]:`, status);
         if (status === 'SUBSCRIBED') {
           await channel.track({
             user_id: user.id,
@@ -82,9 +99,10 @@ export default function EditorPage() {
     channelRef.current = channel;
 
     return () => {
+      console.log('🔌 Disconnecting from realtime channel');
       channel.unsubscribe();
     };
-  }, [user, workspaceId, profile, activeFile?.id]);
+  }, [user?.id, workspaceId, profile?.display_name]);
 
   // Broadcast content changes
   const handleContentChange = useCallback(

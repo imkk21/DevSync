@@ -7,6 +7,7 @@ export default function CodeEditor({ onContentChange }) {
   const { activeFile, editorContent, language, theme, fontSize, setEditorContent, saveFile } = useEditorStore();
   const editorRef = useRef(null);
   const saveTimeoutRef = useRef(null);
+  const broadcastTimeoutRef = useRef(null);
 
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
@@ -30,12 +31,18 @@ export default function CodeEditor({ onContentChange }) {
   const handleChange = useCallback((value) => {
     setEditorContent(value || '');
 
-    // Broadcast changes for realtime collab
+    // Throttled broadcast for realtime collab (100ms)
+    // This prevents hitting Supabase rate limits/payload limits during fast typing
     if (onContentChange) {
-      onContentChange(value || '');
+      if (broadcastTimeoutRef.current) {
+        clearTimeout(broadcastTimeoutRef.current);
+      }
+      broadcastTimeoutRef.current = setTimeout(() => {
+        onContentChange(value || '');
+      }, 100);
     }
 
-    // Auto-save with debounce
+    // Auto-save with debounce (2s)
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
