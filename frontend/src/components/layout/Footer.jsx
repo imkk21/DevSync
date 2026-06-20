@@ -3,30 +3,30 @@ import { Link } from 'react-router-dom';
 
 export default function Footer() {
   return (
-    <footer className="border-t border-surface-800/50 bg-surface-950">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+    <footer className="border-t border-white/[0.04] bg-surface-950 relative z-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
           {/* Brand */}
           <div className="md:col-span-2">
-            <Link to="/" className="flex items-center gap-2.5 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center">
-                <HiCode className="text-white text-lg" />
+            <Link to="/" className="flex items-center gap-2.5 mb-5 group">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-400 to-accent-500 flex items-center justify-center
+                group-hover:shadow-lg group-hover:shadow-brand-500/20 transition-all duration-500">
+                <HiCode className="text-white text-sm" />
               </div>
-              <span className="text-xl font-bold gradient-text">DevSync</span>
+              <span className="text-lg font-bold font-display gradient-text">DevSync</span>
             </Link>
-            <p className="text-surface-400 text-sm max-w-md leading-relaxed">
-              A developer-centric real-time collaborative cloud IDE. Write, execute, and manage code
-              together in a shared workspace environment.
+            <p className="text-surface-500 text-sm max-w-sm leading-relaxed">
+              A developer-centric real-time collaborative cloud IDE. Write, execute, and manage code together in shared workspaces.
             </p>
           </div>
 
           {/* Links */}
           <div>
-            <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Product</h3>
-            <ul className="space-y-2">
+            <h3 className="text-xs font-semibold text-surface-300 uppercase tracking-widest mb-5">Product</h3>
+            <ul className="space-y-3">
               {['Features', 'Pricing', 'Documentation', 'Changelog'].map((item) => (
                 <li key={item}>
-                  <span className="text-sm text-surface-400 hover:text-brand-400 transition-colors cursor-pointer">
+                  <span className="text-sm text-surface-500 hover:text-brand-400 transition-colors duration-300 cursor-pointer">
                     {item}
                   </span>
                 </li>
@@ -35,11 +35,11 @@ export default function Footer() {
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Connect</h3>
-            <ul className="space-y-2">
+            <h3 className="text-xs font-semibold text-surface-300 uppercase tracking-widest mb-5">Connect</h3>
+            <ul className="space-y-3">
               {['GitHub', 'Discord', 'Twitter', 'Email'].map((item) => (
                 <li key={item}>
-                  <span className="text-sm text-surface-400 hover:text-brand-400 transition-colors cursor-pointer">
+                  <span className="text-sm text-surface-500 hover:text-brand-400 transition-colors duration-300 cursor-pointer">
                     {item}
                   </span>
                 </li>
@@ -48,14 +48,14 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-surface-800/50 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-sm text-surface-500">
+        <div className="mt-14 pt-8 border-t border-white/[0.04] flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p className="text-xs text-surface-600">
             © {new Date().getFullYear()} DevSync. Built by Kunal Kumar.
           </p>
-          <div className="flex items-center gap-4 text-xs text-surface-500">
-            <span className="hover:text-surface-300 cursor-pointer">Privacy</span>
-            <span className="hover:text-surface-300 cursor-pointer">Terms</span>
-            <span className="hover:text-surface-300 cursor-pointer">Cookies</span>
+          <div className="flex items-center gap-6 text-xs text-surface-600">
+            <span className="hover:text-surface-400 cursor-pointer transition-colors">Privacy</span>
+            <span className="hover:text-surface-400 cursor-pointer transition-colors">Terms</span>
+            <span className="hover:text-surface-400 cursor-pointer transition-colors">Cookies</span>
           </div>
         </div>
       </div>
