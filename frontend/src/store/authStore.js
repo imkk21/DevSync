@@ -43,34 +43,32 @@ const useAuthStore = create((set, get) => ({
     return created || { id: user.id, email: user.email, display_name: displayName };
   },
 
+  // Display name and picture load in the background; pages only wait for the session
+  loadProfile: (user) => {
+    get().ensureProfile(user)
+      .then((profile) => get().user?.id === user.id && set({ profile }))
+      .catch(() => {});
+  },
+
   initialize: async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const profile = await get().ensureProfile(session.user);
+      set({ user: session?.user ?? null, session, loading: false });
+      if (session) get().loadProfile(session.user);
 
-        set({
-          user: session.user,
-          session,
-          profile,
-          loading: false,
-        });
-      } else {
-        set({ loading: false });
-      }
-
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-          const profile = await get().ensureProfile(session.user);
-
-          set({
-            user: session.user,
-            session,
-            profile,
-          });
-        } else if (event === 'SIGNED_OUT') {
+      // Supabase runs this callback while holding its auth lock, and every query needs that
+      // lock, so a query in here waits on itself until the lock times out. Do no queries here;
+      // defer them until the callback has returned.
+      supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_OUT') {
           set({ user: null, session: null, profile: null });
+          return;
         }
+        if (!session) return;
+        const sameUser = get().user?.id === session.user.id;
+        // Keep the same user object on token refreshes so pages don't refetch everything
+        set({ session, ...(!sameUser && { user: session.user, profile: null }) });
+        if (!sameUser) setTimeout(() => get().loadProfile(session.user), 0);
       });
     } catch (error) {
       set({ error: error.message, loading: false });
