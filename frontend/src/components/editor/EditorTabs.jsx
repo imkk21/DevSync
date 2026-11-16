@@ -1,6 +1,6 @@
-import { HiX } from 'react-icons/hi';
+import { GoX } from 'react-icons/go';
 import useEditorStore from '../../store/editorStore';
-import { fileIcons } from './FileTree';
+import LangDot from '../ui/LangDot';
 
 export default function EditorTabs() {
   const { openFiles, activeFileId, openFile, closeFile } = useEditorStore();
@@ -8,41 +8,51 @@ export default function EditorTabs() {
   if (openFiles.length === 0) return null;
 
   return (
-    <div className="flex items-center bg-surface-950 border-b border-surface-800 overflow-x-auto">
+    <div role="tablist" aria-label="Open files" className="no-scrollbar flex h-9 shrink-0 overflow-x-auto bg-canvas-subtle">
       {openFiles.map((file) => {
-        const ext = file.name.split('.').pop()?.toLowerCase();
-        const icon = fileIcons[ext] || '📄';
-        const isActive = activeFileId === file.id;
-
+        const active = file.id === activeFileId;
         return (
           <div
             key={file.id}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs cursor-pointer group border-r border-surface-800
-              transition-colors min-w-[100px] max-w-[180px]
-              ${isActive
-                ? 'bg-surface-900 text-white border-t-2 border-t-brand-500'
-                : 'text-surface-500 hover:text-surface-300 hover:bg-surface-900/50 border-t-2 border-t-transparent'
-              }`}
+            role="tab"
+            aria-selected={active}
+            tabIndex={0}
+            title={file.path}
             onClick={() => openFile(file)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openFile(file);
+              }
+            }}
+            // Middle-click closes, like a browser tab
+            onAuxClick={(e) => e.button === 1 && closeFile(file.id)}
+            className={`group relative flex min-w-0 max-w-[220px] shrink-0 cursor-pointer select-none items-center gap-2 border-r border-line pl-3 pr-1.5 text-body-sm transition-colors ${
+              active
+                ? 'bg-canvas text-ink before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-brand'
+                : 'border-b text-ink-muted hover:bg-canvas hover:text-ink'
+            }`}
           >
-            <span className="text-[10px]">{icon}</span>
-            <span className="truncate flex-1">{file.name}</span>
+            <LangDot language={file.language} />
+            <span className="truncate">{file.name}</span>
             <button
+              type="button"
+              tabIndex={-1}
               onClick={(e) => {
                 e.stopPropagation();
                 closeFile(file.id);
               }}
-              className={`p-0.5 rounded transition-all
-                ${isActive
-                  ? 'text-surface-500 hover:text-white hover:bg-surface-700'
-                  : 'opacity-0 group-hover:opacity-100 text-surface-600 hover:text-white hover:bg-surface-700'
-                }`}
+              aria-label={`Close ${file.name}`}
+              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-ink-subtle transition-colors hover:bg-canvas-muted hover:text-ink ${
+                active ? '' : 'opacity-0 group-hover:opacity-100'
+              }`}
             >
-              <HiX size={12} />
+              <GoX size={14} />
             </button>
           </div>
         );
       })}
+      <div className="flex-1 border-b border-line" />
     </div>
   );
 }

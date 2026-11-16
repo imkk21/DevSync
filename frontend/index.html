@@ -4,16 +4,29 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="DevSync – Developer-Centric Real-Time Collaborative Cloud IDE. Write, execute, and collaborate on code together." />
+    <meta name="theme-color" content="#FFFFFF" />
+    <meta name="description" content="DevSync is a real-time collaborative cloud IDE. Write, run and ship code together in shared workspaces, right in your browser." />
     <title>DevSync – Collaborative Cloud IDE</title>
+    <script>
+      // Apply the saved theme before first paint so dark mode never flashes white
+      (function () {
+        try {
+          var saved = localStorage.getItem('devsync:theme');
+          var dark = saved === 'dark' || (saved !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) {
+            document.documentElement.classList.add('dark');
+            document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0D1110');
+          }
+        } catch (e) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Mona+Sans:wght@200..900&display=swap" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/@fontsource/monaspace-neon@5.3.0/index.css" rel="stylesheet" />
   </head>
-  <body class="bg-surface-950 text-white antialiased">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

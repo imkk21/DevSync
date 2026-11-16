@@ -1,127 +1,81 @@
 /** @type {import('tailwindcss').Config} */
+// Design tokens from devsync-design.md: white surfaces, black text, one green
+// accent, 1px borders instead of shadows, Mona Sans type scale.
+// Colours are CSS variables (src/index.css) so light and dark themes share every class.
+const token = (name) => `rgb(var(--${name}) / <alpha-value>)`;
+
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
         brand: {
-          50:  '#ecfeff',
-          100: '#cffafe',
-          200: '#a5f3fc',
-          300: '#67e8f9',
-          400: '#22d3ee',
-          500: '#06b6d4',
-          600: '#0891b2',
-          700: '#0e7490',
-          800: '#155e75',
-          900: '#164e63',
-          950: '#083344',
+          DEFAULT: token('brand'), // primary action fill, accents
+          strong: token('brand-strong'), // primary action hover
+          fg: token('brand-fg'), // green text and icons
+          soft: token('brand-soft'), // selected / success backgrounds
+          muted: token('brand-muted'), // text selection
         },
-        surface: {
-          50:  '#f7f7f8',
-          100: '#ebebef',
-          200: '#d1d1db',
-          300: '#ababba',
-          400: '#85858f',
-          500: '#52525e',
-          600: '#35353d',
-          700: '#222228',
-          800: '#151518',
-          900: '#0a0a0c',
-          950: '#030304',
+        ink: {
+          DEFAULT: token('ink'), // on-surface
+          muted: token('ink-muted'), // muted-text
+          subtle: token('ink-subtle'), // placeholders, metadata
         },
-        accent: {
-          300: '#c4b5fd',
-          400: '#a78bfa',
-          500: '#8b5cf6',
-          600: '#7c3aed',
+        line: {
+          DEFAULT: token('line'), // border: cards, dividers
+          strong: token('line-strong'), // tertiary: control outlines
+          emphasis: token('line-emphasis'), // hovered control outlines
+        },
+        canvas: {
+          DEFAULT: token('canvas'),
+          subtle: token('canvas-subtle'), // sidebars, panels
+          muted: token('canvas-muted'), // hover fills
+        },
+        danger: {
+          DEFAULT: token('danger'), // red text and borders
+          solid: token('danger-solid'), // destructive button fill
+          strong: token('danger-strong'), // destructive button hover
+          soft: token('danger-soft'),
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        display: ['Space Grotesk', 'Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        sans: ['"Mona Sans"', 'ui-sans-serif', 'system-ui', '-apple-system', '"Segoe UI"', 'sans-serif'],
+        mono: ['"Monaspace Neon"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
-      animation: {
-        'fade-in': 'fadeIn 0.6s ease-out forwards',
-        'fade-up': 'fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-        'fade-down': 'fadeDown 0.5s ease-out forwards',
-        'slide-up': 'slideUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-        'slide-down': 'slideDown 0.4s ease-out forwards',
-        'scale-in': 'scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-        'float': 'float 6s ease-in-out infinite',
-        'float-delayed': 'float 8s ease-in-out 2s infinite',
-        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'glow': 'glow 3s ease-in-out infinite alternate',
-        'shimmer': 'shimmer 2.5s linear infinite',
-        'marquee': 'marquee 40s linear infinite',
-        'marquee-reverse': 'marqueeReverse 40s linear infinite',
-        'spin-slow': 'spin 12s linear infinite',
-        'gradient-x': 'gradientX 6s ease infinite',
-        'border-pulse': 'borderPulse 3s ease-in-out infinite alternate',
-        'text-reveal': 'textReveal 1s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+      fontSize: {
+        // Headlines scale down fluidly on small screens, capped at the spec size
+        display: ['clamp(2.5rem, 4vw + 1.25rem, 3.5rem)', { lineHeight: '1.1', fontWeight: '440' }],
+        'headline-lg': ['clamp(1.75rem, 2vw + 1rem, 2.125rem)', { lineHeight: '1.3' }],
+        'headline-md': ['28px', { lineHeight: '1.35' }],
+        'headline-sm': ['18px', { lineHeight: '1.22' }],
+        'body-lg': ['18px', { lineHeight: '1.55', letterSpacing: '0.18px' }],
+        'body-md': ['16px', { lineHeight: '1.69', letterSpacing: '0.18px' }],
+        'body-sm': ['14px', { lineHeight: '1.5' }],
+        'label-lg': ['16px', { lineHeight: '1.2', fontWeight: '500' }],
+        'label-md': ['14px', { lineHeight: '1.2', fontWeight: '500' }],
+        'label-sm': ['12px', { lineHeight: '1.2', fontWeight: '500', letterSpacing: '0.02em' }],
+        'code-md': ['14px', { lineHeight: '1.4' }],
+        'code-sm': ['12px', { lineHeight: '1.4' }],
+      },
+      borderRadius: {
+        sm: '4px', // md 6px, lg 8px, xl 12px already match Tailwind's defaults
+      },
+      boxShadow: {
+        // Flat UI: only floating layers (menus, dialogs) get a shadow
+        overlay: 'var(--shadow-overlay)',
       },
       keyframes: {
-        fadeIn: {
-          '0%': { opacity: '0' },
-          '100%': { opacity: '1' },
-        },
-        fadeUp: {
-          '0%': { opacity: '0', transform: 'translateY(40px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-        fadeDown: {
-          '0%': { opacity: '0', transform: 'translateY(-20px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-        slideUp: {
-          '0%': { opacity: '0', transform: 'translateY(24px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-        slideDown: {
-          '0%': { opacity: '0', transform: 'translateY(-12px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-        scaleIn: {
-          '0%': { opacity: '0', transform: 'scale(0.92)' },
-          '100%': { opacity: '1', transform: 'scale(1)' },
-        },
-        float: {
-          '0%, 100%': { transform: 'translateY(0px)' },
-          '50%': { transform: 'translateY(-20px)' },
-        },
-        glow: {
-          '0%': { boxShadow: '0 0 20px rgba(6, 182, 212, 0.15), 0 0 60px rgba(6, 182, 212, 0.05)' },
-          '100%': { boxShadow: '0 0 30px rgba(6, 182, 212, 0.3), 0 0 80px rgba(139, 92, 246, 0.1)' },
-        },
-        shimmer: {
-          '0%': { backgroundPosition: '-200% 0' },
-          '100%': { backgroundPosition: '200% 0' },
-        },
-        marquee: {
-          '0%': { transform: 'translateX(0%)' },
-          '100%': { transform: 'translateX(-50%)' },
-        },
-        marqueeReverse: {
-          '0%': { transform: 'translateX(-50%)' },
-          '100%': { transform: 'translateX(0%)' },
-        },
-        gradientX: {
-          '0%, 100%': { backgroundSize: '200% 200%', backgroundPosition: 'left center' },
-          '50%': { backgroundSize: '200% 200%', backgroundPosition: 'right center' },
-        },
-        borderPulse: {
-          '0%': { borderColor: 'rgba(6, 182, 212, 0.15)' },
-          '100%': { borderColor: 'rgba(139, 92, 246, 0.25)' },
-        },
-        textReveal: {
-          '0%': { opacity: '0', transform: 'translateY(100%)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
+        'fade-in': { from: { opacity: '0' }, to: { opacity: '1' } },
+        'fade-up': { from: { opacity: '0', transform: 'translateY(8px)' }, to: { opacity: '1', transform: 'none' } },
+        'scale-in': { from: { opacity: '0', transform: 'scale(0.98)' }, to: { opacity: '1', transform: 'none' } },
+        blink: { '50%': { opacity: '0' } },
       },
-      backgroundImage: {
-        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
+      animation: {
+        'fade-in': 'fade-in 150ms ease-out',
+        'fade-up': 'fade-up 500ms cubic-bezier(0.2, 0, 0, 1) both',
+        'scale-in': 'scale-in 120ms cubic-bezier(0.2, 0, 0, 1)',
+        blink: 'blink 1.1s step-end infinite',
       },
     },
   },

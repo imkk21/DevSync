@@ -1,31 +1,85 @@
-import { useRef, useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import Editor from '@monaco-editor/react';
+import { GoFile } from 'react-icons/go';
 import useEditorStore from '../../store/editorStore';
 import LoadingSpinner from '../ui/LoadingSpinner';
+import Shortcut, { MOD } from '../ui/Shortcut';
+import useThemeStore from '../../store/themeStore';
+import { THEMES, defineDevSyncThemes } from '../../lib/monacoTheme';
+
+const OPTIONS = {
+  fontSize: 14,
+  lineHeight: 22,
+  fontFamily: "'Monaspace Neon', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+  fontLigatures: true,
+  minimap: { enabled: false },
+  padding: { top: 12, bottom: 12 },
+  scrollBeyondLastLine: false,
+  smoothScrolling: true,
+  cursorBlinking: 'smooth',
+  cursorSmoothCaretAnimation: 'on',
+  renderLineHighlight: 'all',
+  renderWhitespace: 'selection',
+  bracketPairColorization: { enabled: true },
+  guides: { indentation: true, bracketPairs: false },
+  autoClosingBrackets: 'always',
+  autoClosingQuotes: 'always',
+  formatOnPaste: true,
+  overviewRulerBorder: false,
+  hideCursorInOverviewRuler: true,
+  scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10, useShadows: false },
+  lineNumbersMinChars: 3,
+  glyphMargin: false,
+  folding: true,
+};
+
+function EmptyState() {
+  return (
+    <div className="flex h-full items-center justify-center bg-canvas px-6">
+      <div className="max-w-sm text-center">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-canvas-muted text-ink-muted">
+          <GoFile size={20} aria-hidden="true" />
+        </span>
+        <h2 className="mt-4 text-headline-sm font-semibold text-ink">No file open</h2>
+        <p className="mt-2 text-body-sm text-ink-muted">Pick a file from the sidebar, or create a new one to start coding.</p>
+        <dl className="mx-auto mt-6 grid w-52 grid-cols-[1fr_auto] items-center gap-y-2.5 text-body-sm">
+          <dt className="text-left text-ink-muted">Save</dt>
+          <dd><Shortcut keys={[MOD, 'S']} /></dd>
+          <dt className="text-left text-ink-muted">Run</dt>
+          <dd><Shortcut keys={[MOD, 'Enter']} /></dd>
+        </dl>
+      </div>
+    </div>
+  );
+}
 
 export default function CodeEditor({ onContentChange, readOnly = false }) {
-  const { activeFile, editorContent, language, theme, fontSize, setEditorContent, saveFile } = useEditorStore();
-  const editorRef = useRef(null);
+  const { activeFile, editorContent, language, setEditorContent, saveFile } = useEditorStore();
+  const resolvedTheme = useThemeStore((s) => s.resolved);
   const saveTimeoutRef = useRef(null);
   const broadcastTimeoutRef = useRef(null);
 
-  const handleEditorDidMount = (editor, monaco) => {
-    editorRef.current = editor;
-
-    // Add keybinding for Ctrl+S
+  const handleMount = (editor, monaco) => {
+    // Actions are registered once, so they read the store instead of closures
     editor.addAction({
-      id: 'save-file',
-      label: 'Save File',
+      id: 'devsync.save',
+      label: 'Save file',
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
       run: () => {
-        // Read from the store, not the closure: this action is registered once on mount
         const { activeFile: current } = useEditorStore.getState();
         if (current && !editor.getOption(monaco.editor.EditorOption.readOnly)) {
           saveFile(current.id, editor.getValue());
         }
       },
     });
-
+    editor.addAction({
+      id: 'devsync.run',
+      label: 'Run code',
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
+      run: () => useEditorStore.getState().runCode(),
+    });
+    // Web fonts can finish loading after Monaco measures them; re-measure so the cursor lines up
+    document.fonts?.ready.then(() => monaco.editor.remeasureFonts());
     editor.focus();
   };
 
@@ -37,89 +91,33 @@ export default function CodeEditor({ onContentChange, readOnly = false }) {
     if (readOnly) return;
 
     // Throttled broadcast for realtime collab (100ms)
-    // This prevents hitting Supabase rate limits/payload limits during fast typing
     if (onContentChange) {
-      if (broadcastTimeoutRef.current) {
-        clearTimeout(broadcastTimeoutRef.current);
-      }
-      broadcastTimeoutRef.current = setTimeout(() => {
-        onContentChange(value || '');
-      }, 100);
+      clearTimeout(broadcastTimeoutRef.current);
+      broadcastTimeoutRef.current = setTimeout(() => onContentChange(value || ''), 100);
     }
 
     // Auto-save with debounce (2s)
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
+    clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
-      if (activeFile) {
-        saveFile(activeFile.id, value || '');
-      }
+      if (activeFile) saveFile(activeFile.id, value || '');
     }, 2000);
   }, [activeFile, onContentChange, saveFile, setEditorContent, readOnly]);
 
-  const getMonacoLanguage = (lang) => {
-    const map = {
-      javascript: 'javascript', typescript: 'typescript', python: 'python',
-      java: 'java', c: 'c', cpp: 'cpp', go: 'go', rust: 'rust',
-      ruby: 'ruby', php: 'php', csharp: 'csharp', html: 'html',
-      css: 'css', json: 'json', markdown: 'markdown', plaintext: 'plaintext',
-    };
-    return map[lang] || 'plaintext';
-  };
-
-  if (!activeFile) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-surface-950">
-        <div className="text-center animate-fade-in">
-          <div className="text-6xl mb-4 opacity-20">⌨️</div>
-          <h3 className="text-lg font-medium text-surface-400 mb-2">No file open</h3>
-          <p className="text-sm text-surface-600">Select a file from the sidebar to start editing</p>
-        </div>
-      </div>
-    );
-  }
+  if (!activeFile) return <EmptyState />;
 
   return (
-    <div className="flex-1 h-full">
-      <Editor
-        height="100%"
-        language={getMonacoLanguage(language)}
-        value={editorContent}
-        theme={theme}
-        onChange={handleChange}
-        onMount={handleEditorDidMount}
-        loading={
-          <div className="flex-1 flex items-center justify-center bg-surface-950">
-            <LoadingSpinner size="lg" />
-          </div>
-        }
-        options={{
-          readOnly,
-          fontSize,
-          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-          fontLigatures: true,
-          minimap: { enabled: true, scale: 1 },
-          scrollBeyondLastLine: false,
-          smoothScrolling: true,
-          cursorBlinking: 'smooth',
-          cursorSmoothCaretAnimation: 'on',
-          renderLineHighlight: 'all',
-          renderWhitespace: 'selection',
-          bracketPairColorization: { enabled: true },
-          autoClosingBrackets: 'always',
-          autoClosingQuotes: 'always',
-          formatOnPaste: true,
-          suggestOnTriggerCharacters: true,
-          acceptSuggestionOnCommitCharacter: true,
-          wordWrap: 'off',
-          lineNumbers: 'on',
-          glyphMargin: false,
-          folding: true,
-          contextmenu: true,
-          padding: { top: 16 },
-        }}
-      />
-    </div>
+    <Editor
+      height="100%"
+      // One model per file: each keeps its own undo history, cursor and scroll position
+      path={activeFile.id}
+      language={language}
+      value={editorContent}
+      theme={THEMES[resolvedTheme]}
+      beforeMount={defineDevSyncThemes}
+      onChange={handleChange}
+      onMount={handleMount}
+      loading={<LoadingSpinner size="lg" className="text-brand" />}
+      options={{ ...OPTIONS, readOnly }}
+    />
   );
 }

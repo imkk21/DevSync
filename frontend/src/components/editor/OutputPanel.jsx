@@ -1,157 +1,145 @@
-import { useState } from 'react';
-import { HiPlay, HiStop, HiTerminal, HiChevronUp, HiChevronDown, HiClock, HiChip } from 'react-icons/hi';
+import { useEffect, useState } from 'react';
+import { GoCheckCircle, GoChevronDown, GoChevronUp, GoCircleSlash, GoClock, GoCpu, GoXCircle } from 'react-icons/go';
 import useEditorStore from '../../store/editorStore';
-import { compilerService } from '../../services/compilerService';
+import LoadingSpinner from '../ui/LoadingSpinner';
+import Shortcut, { MOD } from '../ui/Shortcut';
 
-const LANGUAGES = [
-  { value: 'javascript', label: 'JavaScript', judge0Id: 63 },
-  { value: 'typescript', label: 'TypeScript', judge0Id: 74 },
-  { value: 'python', label: 'Python 3', judge0Id: 71 },
-  { value: 'java', label: 'Java', judge0Id: 62 },
-  { value: 'c', label: 'C (GCC)', judge0Id: 50 },
-  { value: 'cpp', label: 'C++ (GCC)', judge0Id: 54 },
-  { value: 'go', label: 'Go', judge0Id: 60 },
-  { value: 'rust', label: 'Rust', judge0Id: 73 },
-  { value: 'ruby', label: 'Ruby', judge0Id: 72 },
-  { value: 'php', label: 'PHP', judge0Id: 68 },
-  { value: 'csharp', label: 'C#', judge0Id: 51 },
+const TABS = [
+  { id: 'output', label: 'Output' },
+  { id: 'input', label: 'Input' },
 ];
 
+function Status({ output }) {
+  const ok = output.status?.id === 3;
+  return (
+    <>
+      <span className={`badge ${ok ? 'border-brand/25 bg-brand-soft text-brand-fg' : 'border-danger/25 bg-danger-soft text-danger'}`}>
+        {ok ? <GoCheckCircle size={12} aria-hidden="true" /> : <GoXCircle size={12} aria-hidden="true" />}
+        {output.status?.description || 'Finished'}
+      </span>
+      {output.time && (
+        <span className="hidden items-center gap-1 font-mono text-code-sm text-ink-muted sm:inline-flex" title="Run time">
+          <GoClock size={12} aria-hidden="true" /> {output.time}s
+        </span>
+      )}
+      {output.memory && (
+        <span className="hidden items-center gap-1 font-mono text-code-sm text-ink-muted sm:inline-flex" title="Memory">
+          <GoCpu size={12} aria-hidden="true" /> {(output.memory / 1024).toFixed(1)} MB
+        </span>
+      )}
+    </>
+  );
+}
+
+function OutputBody({ output, isRunning }) {
+  if (isRunning) {
+    return <p className="px-4 py-3 font-mono text-code-md text-ink-muted">Running your code…</p>;
+  }
+  if (!output) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-body-sm text-ink-muted">
+        <p>Run your code to see its output here.</p>
+        <Shortcut keys={[MOD, 'Enter']} />
+      </div>
+    );
+  }
+  const empty = !output.stdout && !output.stderr && !output.compile_output;
+  return (
+    <pre className="whitespace-pre-wrap break-words px-4 py-3 font-mono text-code-md leading-relaxed">
+      {output.compile_output && <span className="block text-danger">{output.compile_output}</span>}
+      {output.stdout && <span className="block text-ink">{output.stdout}</span>}
+      {output.stderr && <span className="block text-danger">{output.stderr}</span>}
+      {empty && <span className="text-ink-muted">Program finished with no output.</span>}
+    </pre>
+  );
+}
+
 export default function OutputPanel() {
-  const { activeFile, editorContent, language, output, isRunning, stdin, setOutput, setIsRunning, setStdin } = useEditorStore();
+  const { output, isRunning, stdin, setStdin, setOutput } = useEditorStore();
   const [collapsed, setCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState('output');
+  const [tab, setTab] = useState('output');
 
-  const currentLang = LANGUAGES.find((l) => l.value === language) || LANGUAGES[0];
-
-  const handleRun = async () => {
-    setIsRunning(true);
-    setOutput(null);
-    setActiveTab('output');
-
-    try {
-      const response = await compilerService.run(editorContent, currentLang.judge0Id, stdin, activeFile?.workspace_id, activeFile?.id);
-
-      setOutput(response.data);
-    } catch (error) {
-      setOutput({
-        stderr: error.response?.data?.message || error.message || 'Execution failed. Make sure the backend server is running.',
-        status: { description: 'Error' },
-      });
-    } finally {
-      setIsRunning(false);
+  // Running always brings the output into view
+  useEffect(() => {
+    if (isRunning) {
+      setCollapsed(false);
+      setTab('output');
     }
-  };
+  }, [isRunning]);
 
   return (
-    <div className={`border-t border-surface-800 bg-surface-950 flex flex-col transition-all duration-300 ${collapsed ? 'h-10' : 'h-64'}`}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-surface-800 bg-surface-900/50">
-        <div className="flex items-center gap-2">
-          <HiTerminal className="text-surface-500" size={16} />
-          <div className="flex gap-1">
-            {['output', 'input'].map((tab) => (
+    <section aria-label="Output" className={`flex shrink-0 flex-col border-t border-line bg-canvas ${collapsed ? '' : 'h-60'}`}>
+      <div className={`flex h-9 shrink-0 items-center gap-3 pl-2 pr-1.5 ${collapsed ? '' : 'border-b border-line'}`}>
+        <div role="tablist" aria-label="Output panel" className="flex h-full">
+          {TABS.map((t) => {
+            const active = tab === t.id;
+            return (
               <button
-                key={tab}
-                onClick={() => { setActiveTab(tab); setCollapsed(false); }}
-                className={`px-2.5 py-1 text-xs rounded font-medium transition-colors capitalize
-                  ${activeTab === tab ? 'bg-surface-800 text-white' : 'text-surface-500 hover:text-surface-300'}`}
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => { setTab(t.id); setCollapsed(false); }}
+                className={`relative flex h-full items-center gap-1.5 px-3 text-label-md transition-colors ${
+                  active && !collapsed
+                    ? 'text-ink after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-brand'
+                    : 'text-ink-muted hover:text-ink'
+                }`}
               >
-                {tab}
+                {t.label}
+                {t.id === 'input' && stdin && <span className="h-1.5 w-1.5 rounded-full bg-brand" aria-label="(has input)" />}
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
 
-        <div className="flex items-center gap-2">
-          {output?.time && (
-            <span className="flex items-center gap-1 text-xs text-surface-500">
-              <HiClock size={12} />
-              {output.time}s
+        <div className="ml-auto flex items-center gap-3">
+          {isRunning ? (
+            <span className="inline-flex items-center gap-1.5 text-label-sm text-ink-muted">
+              <LoadingSpinner size="sm" className="text-brand" /> Running
             </span>
+          ) : (
+            output && <Status output={output} />
           )}
-          {output?.memory && (
-            <span className="flex items-center gap-1 text-xs text-surface-500">
-              <HiChip size={12} />
-              {(output.memory / 1024).toFixed(1)}MB
-            </span>
-          )}
-
-          <button
-            onClick={handleRun}
-            disabled={isRunning || !editorContent}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-semibold transition-all
-              ${isRunning
-                ? 'bg-red-500/20 text-red-400'
-                : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
-              } disabled:opacity-50`}
-          >
-            {isRunning ? (
-              <><HiStop size={14} /> Running...</>
-            ) : (
-              <><HiPlay size={14} /> Run</>
+          <div className="flex items-center">
+            {output && !isRunning && (
+              <button type="button" onClick={() => setOutput(null)} className="icon-btn h-7 w-7" aria-label="Clear output" title="Clear output">
+                <GoCircleSlash size={14} />
+              </button>
             )}
-          </button>
-
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="p-1 rounded text-surface-500 hover:text-white hover:bg-surface-800 transition-colors"
-          >
-            {collapsed ? <HiChevronUp size={14} /> : <HiChevronDown size={14} />}
-          </button>
+            <button
+              type="button"
+              onClick={() => setCollapsed((c) => !c)}
+              className="icon-btn h-7 w-7"
+              aria-expanded={!collapsed}
+              aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
+              title={collapsed ? 'Expand panel' : 'Collapse panel'}
+            >
+              {collapsed ? <GoChevronUp size={16} /> : <GoChevronDown size={16} />}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Content */}
       {!collapsed && (
-        <div className="flex-1 overflow-auto p-3">
-          {activeTab === 'output' ? (
-            <div className="code-font text-xs leading-relaxed">
-              {isRunning ? (
-                <div className="flex items-center gap-2 text-surface-400">
-                  <div className="w-3 h-3 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-                  Executing...
-                </div>
-              ) : output ? (
-                <>
-                  {output.compile_output && (
-                    <div className="text-yellow-400 mb-2 whitespace-pre-wrap">{output.compile_output}</div>
-                  )}
-                  {output.stdout && (
-                    <div className="text-emerald-300 whitespace-pre-wrap">{output.stdout}</div>
-                  )}
-                  {output.stderr && (
-                    <div className="text-red-400 whitespace-pre-wrap">{output.stderr}</div>
-                  )}
-                  {output.status && (
-                    <div className={`mt-2 pt-2 border-t border-surface-800 text-xs
-                      ${output.status.id === 3 ? 'text-emerald-500' : 'text-red-400'}`}
-                    >
-                      Status: {output.status.description}
-                    </div>
-                  )}
-                  {!output.stdout && !output.stderr && !output.compile_output && (
-                    <span className="text-surface-500">No output</span>
-                  )}
-                </>
-              ) : (
-                <span className="text-surface-600">Click "Run" to execute your code</span>
-              )}
-            </div>
+        <div className="min-h-0 flex-1 overflow-auto" role="tabpanel">
+          {tab === 'output' ? (
+            <OutputBody output={output} isRunning={isRunning} />
           ) : (
-            <div>
-              <label className="text-xs text-surface-500 mb-1 block">Standard Input (stdin)</label>
+            <div className="flex h-full flex-col p-3">
+              <label htmlFor="program-stdin" className="sr-only">Program input (stdin)</label>
               <textarea
-                className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs code-font text-white
-                  focus:outline-none focus:ring-1 focus:ring-brand-500/50 focus:border-brand-500 resize-none h-36"
+                id="program-stdin"
                 value={stdin}
                 onChange={(e) => setStdin(e.target.value)}
-                placeholder="Enter input values here..."
+                placeholder="Input passed to your program on stdin, one value per line"
+                spellCheck={false}
+                className="input input-multiline min-h-0 flex-1 font-mono sm:text-code-md"
               />
             </div>
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 }

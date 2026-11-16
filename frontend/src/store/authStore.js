@@ -77,26 +77,28 @@ const useAuthStore = create((set, get) => ({
     }
   },
 
+  // `loading` is only for the initial session check; the login buttons show
+  // their own pending state while the browser redirects to the provider.
   signInWithGoogle: async () => {
-    set({ loading: true, error: null });
+    set({ error: null });
     try {
       const { data, error } = await authService.signInWithGoogle();
       if (error) throw error;
       return { data, error: null };
     } catch (error) {
-      set({ error: error.message, loading: false });
+      set({ error: error.message });
       return { data: null, error };
     }
   },
 
   signInWithGithub: async () => {
-    set({ loading: true, error: null });
+    set({ error: null });
     try {
       const { data, error } = await authService.signInWithGithub();
       if (error) throw error;
       return { data, error: null };
     } catch (error) {
-      set({ error: error.message, loading: false });
+      set({ error: error.message });
       return { data: null, error };
     }
   },

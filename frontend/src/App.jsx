@@ -5,18 +5,12 @@ import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import EditorPage from './pages/EditorPage';
-import LoadingSpinner from './components/ui/LoadingSpinner';
+import { PageLoader } from './components/ui/LoadingSpinner';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuthStore();
 
-  if (loading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-surface-950">
-        <LoadingSpinner size="xl" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoader />;
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -28,13 +22,7 @@ function ProtectedRoute({ children }) {
 function PublicRoute({ children }) {
   const { user, loading } = useAuthStore();
 
-  if (loading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-surface-950">
-        <LoadingSpinner size="xl" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoader />;
 
   if (user) {
     return <Navigate to="/dashboard" replace />;
@@ -51,7 +39,7 @@ export default function App() {
   }, [initialize]);
 
   return (
-    <div className="min-h-screen bg-surface-950">
+    <div className="min-h-screen bg-canvas">
       <Routes>
         <Route path="/" element={<LandingPage />} />
 

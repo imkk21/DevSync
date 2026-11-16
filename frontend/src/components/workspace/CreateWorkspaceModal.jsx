@@ -1,117 +1,119 @@
 import { useState } from 'react';
+import { GoCheck } from 'react-icons/go';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
-import { HiCode, HiDocumentText } from 'react-icons/hi';
+import Alert from '../ui/Alert';
+import LangDot from '../ui/LangDot';
+import { LANGUAGES } from '../../lib/languages';
 
-const LANGUAGES = [
-  { value: 'javascript', label: 'JavaScript', icon: '🟨' },
-  { value: 'typescript', label: 'TypeScript', icon: '🔷' },
-  { value: 'python', label: 'Python', icon: '🐍' },
-  { value: 'java', label: 'Java', icon: '☕' },
-  { value: 'c', label: 'C', icon: '⚙️' },
-  { value: 'cpp', label: 'C++', icon: '⚡' },
-  { value: 'go', label: 'Go', icon: '🐹' },
-  { value: 'rust', label: 'Rust', icon: '🦀' },
-  { value: 'ruby', label: 'Ruby', icon: '💎' },
-  { value: 'php', label: 'PHP', icon: '🐘' },
-  { value: 'csharp', label: 'C#', icon: '🎯' },
-];
+const FORM_ID = 'create-workspace-form';
+const MAX_DESCRIPTION = 200;
 
 export default function CreateWorkspaceModal({ isOpen, onClose, onCreate }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [language, setLanguage] = useState('javascript');
-  const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(false);
+  const [nameError, setNameError] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const validate = () => {
-    const errs = {};
-    if (!name.trim()) errs.name = 'Workspace name is required';
-    else if (name.trim().length < 3) errs.name = 'Must be at least 3 characters';
-    else if (name.trim().length > 50) errs.name = 'Must be less than 50 characters';
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validate()) return;
-    setLoading(true);
-    setSubmitError('');
-    const result = await onCreate(name.trim(), description.trim(), language);
-    setLoading(false);
-    if (result?.error) {
-      setSubmitError(result.error.message || 'Failed to create workspace');
-      return;
-    }
+  const close = () => {
     setName('');
     setDescription('');
     setLanguage('javascript');
+    setNameError('');
     setSubmitError('');
     onClose();
   };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (trimmed.length < 3) return setNameError('Use at least 3 characters.');
+    if (trimmed.length > 50) return setNameError('Use 50 characters or fewer.');
+
+    setLoading(true);
+    setSubmitError('');
+    const result = await onCreate(trimmed, description.trim(), language);
+    setLoading(false);
+    if (result?.error) return setSubmitError(result.error.message || 'Could not create the workspace. Try again.');
+    close();
+  };
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Create New Workspace">
-      <form onSubmit={handleSubmit} className="space-y-5">
+    <Modal
+      isOpen={isOpen}
+      onClose={close}
+      title="Create a workspace"
+      description="A workspace holds your files and the people you code with."
+      footer={
+        <>
+          <Button variant="secondary" onClick={close}>Cancel</Button>
+          <Button type="submit" form={FORM_ID} loading={loading}>Create workspace</Button>
+        </>
+      }
+    >
+      <form id={FORM_ID} onSubmit={handleSubmit} noValidate className="space-y-6">
         <Input
-          label="Workspace Name"
-          icon={HiCode}
-          placeholder="My Awesome Project"
+          label="Name"
+          placeholder="e.g. algorithms-practice"
           value={name}
-          onChange={(e) => setName(e.target.value)}
-          error={errors.name}
-          id="workspace-name"
+          onChange={(e) => { setName(e.target.value); setNameError(''); }}
+          error={nameError}
+          hint="3 to 50 characters."
+          maxLength={50}
+          autoComplete="off"
         />
 
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-surface-300">Description (optional)</label>
+          <div className="flex items-baseline justify-between gap-3">
+            <label htmlFor="workspace-description" className="text-label-md text-ink">
+              Description <span className="font-normal text-ink-muted">(optional)</span>
+            </label>
+            <span className="text-label-sm tabular-nums text-ink-subtle">{description.length}/{MAX_DESCRIPTION}</span>
+          </div>
           <textarea
-            className="input-field resize-none h-20"
-            placeholder="What's this workspace for?"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
             id="workspace-description"
+            className="input input-multiline"
+            placeholder="What are you building?"
+            value={description}
+            maxLength={MAX_DESCRIPTION}
+            onChange={(e) => setDescription(e.target.value)}
           />
         </div>
 
-        <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-surface-300">Default Language</label>
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-            {LANGUAGES.map((lang) => (
-              <button
-                key={lang.value}
-                type="button"
-                onClick={() => setLanguage(lang.value)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all
-                  ${language === lang.value
-                    ? 'bg-brand-500/20 border-brand-500 text-brand-300 border'
-                    : 'bg-surface-800 border border-surface-700 text-surface-400 hover:border-surface-600'
+        <fieldset>
+          <legend className="text-label-md text-ink">Language</legend>
+          <p className="mt-1.5 text-body-sm text-ink-muted">We'll add a starter file you can run straight away.</p>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {LANGUAGES.map((lang) => {
+              const selected = language === lang.id;
+              return (
+                <label
+                  key={lang.id}
+                  className={`flex h-10 cursor-pointer items-center gap-2.5 rounded-md border px-3 text-label-md text-ink transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand has-[:focus-visible]:ring-offset-1 ${
+                    selected ? 'border-brand bg-brand-soft' : 'border-line-strong hover:border-line-emphasis hover:bg-canvas-subtle'
                   }`}
-              >
-                <span>{lang.icon}</span>
-                {lang.label}
-              </button>
-            ))}
+                >
+                  <input
+                    type="radio"
+                    name="language"
+                    value={lang.id}
+                    checked={selected}
+                    onChange={() => setLanguage(lang.id)}
+                    className="sr-only"
+                  />
+                  <LangDot language={lang.id} />
+                  {lang.label}
+                  {selected && <GoCheck size={16} className="ml-auto text-brand" aria-hidden="true" />}
+                </label>
+              );
+            })}
           </div>
-        </div>
+        </fieldset>
 
-        {submitError && (
-          <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-            {submitError}
-          </div>
-        )}
-
-        <div className="flex gap-3 pt-2">
-          <Button type="button" variant="secondary" onClick={onClose} className="flex-1">
-            Cancel
-          </Button>
-          <Button type="submit" loading={loading} className="flex-1">
-            Create Workspace
-          </Button>
-        </div>
+        {submitError && <Alert>{submitError}</Alert>}
       </form>
     </Modal>
   );

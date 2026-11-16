@@ -1,140 +1,235 @@
-import { useState, useEffect } from 'react';
-import { HiPlus, HiSearch, HiViewGrid, HiViewList, HiRefresh } from 'react-icons/hi';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { GoColumns, GoPlus, GoRepo, GoRows, GoSearch, GoSync, GoX } from 'react-icons/go';
 import Navbar from '../components/layout/Navbar';
-import WorkspaceCard from '../components/workspace/WorkspaceCard';
+import WorkspaceCard, { WorkspaceRow } from '../components/workspace/WorkspaceCard';
 import CreateWorkspaceModal from '../components/workspace/CreateWorkspaceModal';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import Button from '../components/ui/Button';
+import Alert from '../components/ui/Alert';
+import ToggleGroup from '../components/ui/ToggleGroup';
 import useAuthStore from '../store/authStore';
 import useWorkspaceStore from '../store/workspaceStore';
 
+const FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'owned', label: 'Owned by you' },
+  { id: 'shared', label: 'Shared with you' },
+];
+
+const VIEW_KEY = 'devsync:dashboard-view';
+function readView() {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid';
+  } catch {
+    return 'grid';
+  }
+}
+
+function SkeletonCard() {
+  return (
+    <div className="card p-4" aria-hidden="true">
+      <div className="skeleton h-3 w-24" />
+      <div className="skeleton mt-4 h-4 w-40" />
+      <div className="skeleton mt-3 h-3 w-full" />
+      <div className="skeleton mt-2 h-3 w-2/3" />
+      <div className="mt-5 border-t border-line pt-3">
+        <div className="skeleton h-3 w-32" />
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const { user, profile } = useAuthStore();
-  const { workspaces, loading, fetchWorkspaces, createWorkspace, deleteWorkspace } = useWorkspaceStore();
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const { workspaces, loading, error, fetchWorkspaces, createWorkspace, deleteWorkspace } = useWorkspaceStore();
+  const [showCreate, setShowCreate] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [search, setSearch] = useState('');
-  const [viewMode, setViewMode] = useState('grid');
+  const [filter, setFilter] = useState('all');
+  const [view, setView] = useState(readView);
 
   useEffect(() => {
-    if (user) {
-      fetchWorkspaces(user.id);
-    }
+    if (user) fetchWorkspaces(user.id);
   }, [user, fetchWorkspaces]);
 
+  const changeView = (next) => {
+    setView(next);
+    try { localStorage.setItem(VIEW_KEY, next); } catch { /* storage unavailable */ }
+  };
+
+  const isOwner = (w) => w.owner_id === user?.id;
+  const counts = useMemo(() => {
+    const owned = workspaces.filter((w) => w.owner_id === user?.id).length;
+    return { all: workspaces.length, owned, shared: workspaces.length - owned };
+  }, [workspaces, user]);
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return workspaces.filter((w) => {
+      const owned = w.owner_id === user?.id;
+      if (filter === 'owned' && !owned) return false;
+      if (filter === 'shared' && owned) return false;
+      return !q || w.name.toLowerCase().includes(q) || w.description?.toLowerCase().includes(q);
+    });
+  }, [workspaces, search, filter, user]);
+
   const handleCreate = async (name, description, language) => {
-    return await createWorkspace(name, description, language, user.id);
+    const result = await createWorkspace(name, description, language, user.id);
+    if (!result.error) navigate(`/editor/${result.data.id}`);
+    return result;
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this workspace? This action cannot be undone.')) {
-      await deleteWorkspace(id);
-    }
+  const confirmDelete = async () => {
+    setDeleting(true);
+    await deleteWorkspace(pendingDelete.id);
+    setDeleting(false);
+    setPendingDelete(null);
   };
 
-  const filteredWorkspaces = workspaces.filter((w) =>
-    w.name.toLowerCase().includes(search.toLowerCase()) ||
-    w.description?.toLowerCase().includes(search.toLowerCase())
-  );
+  const firstName = profile?.display_name?.split(' ')[0];
+  const firstLoad = loading && workspaces.length === 0;
+  const filterOptions = FILTERS.map((f) => ({
+    ...f,
+    label: (
+      <>
+        {f.label}
+        <span className="tabular-nums text-ink-subtle">{counts[f.id]}</span>
+      </>
+    ),
+  }));
 
   return (
-    <div className="min-h-screen bg-surface-950">
+    <div className="min-h-screen bg-canvas">
       <Navbar />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8 animate-fade-in">
+      <main className="mx-auto max-w-6xl px-4 pb-20 pt-10 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white">
-              Welcome back, <span className="gradient-text">{profile?.display_name || 'Developer'}</span>
-            </h1>
-            <p className="text-surface-400 text-sm mt-1">Manage your workspaces and start coding</p>
+            <h1 className="text-headline-md text-ink">Workspaces</h1>
+            <p className="mt-1.5 text-body-md text-ink-muted">
+              {firstName ? `Welcome back, ${firstName}. ` : ''}Pick up where you left off.
+            </p>
           </div>
-          <Button onClick={() => setShowCreateModal(true)}>
-            <HiPlus size={18} />
-            New Workspace
+          <Button onClick={() => setShowCreate(true)} className="self-start sm:self-auto">
+            <GoPlus size={16} /> New workspace
           </Button>
         </div>
 
-        {/* Filters */}
-        <div className="flex items-center gap-3 mb-6 animate-fade-in">
-          <div className="relative flex-1 max-w-md">
-            <HiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-500" size={18} />
+        {/* Toolbar: one row on desktop; on phones the filters drop to their own full-width row */}
+        <div className="mt-8 flex flex-wrap items-center gap-3">
+          <div className="relative min-w-0 flex-1 lg:max-w-sm">
+            <GoSearch size={16} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" />
             <input
-              type="text"
-              className="input-field pl-10"
-              placeholder="Search workspaces..."
+              type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              id="search-workspaces"
+              placeholder="Find a workspace…"
+              aria-label="Find a workspace"
+              className="input pl-9"
             />
           </div>
-          <div className="flex border border-surface-700 rounded-lg overflow-hidden">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-2 transition-colors ${viewMode === 'grid' ? 'bg-surface-800 text-white' : 'text-surface-500 hover:text-surface-300'}`}
-            >
-              <HiViewGrid size={18} />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-2 transition-colors ${viewMode === 'list' ? 'bg-surface-800 text-white' : 'text-surface-500 hover:text-surface-300'}`}
-            >
-              <HiViewList size={18} />
-            </button>
+          <div className="no-scrollbar order-last w-full overflow-x-auto lg:order-none lg:w-auto">
+            <ToggleGroup label="Filter workspaces" options={filterOptions} value={filter} onChange={setFilter} />
           </div>
-          <button
-            onClick={() => fetchWorkspaces(user.id)}
-            className="p-2 rounded-lg border border-surface-700 text-surface-500 hover:text-white hover:bg-surface-800 transition-colors"
-            title="Refresh"
-          >
-            <HiRefresh size={18} />
-          </button>
+          <div className="flex items-center gap-2 lg:ml-auto">
+              <ToggleGroup
+                label="Layout"
+                value={view}
+                onChange={changeView}
+                options={[
+                  { id: 'grid', icon: <GoColumns size={16} />, ariaLabel: 'Grid view' },
+                  { id: 'list', icon: <GoRows size={16} />, ariaLabel: 'List view' },
+                ]}
+              />
+              <button
+                type="button"
+                onClick={() => fetchWorkspaces(user.id)}
+                disabled={loading}
+                aria-label="Refresh workspaces"
+                title="Refresh"
+                className="icon-btn h-10 w-10 border border-line-strong"
+              >
+                <GoSync size={16} className={loading ? 'animate-spin' : ''} />
+              </button>
+          </div>
         </div>
 
         {/* Content */}
-        {loading ? (
-          <div className="py-20">
-            <LoadingSpinner size="lg" />
-          </div>
-        ) : filteredWorkspaces.length > 0 ? (
-          <div className={`animate-fade-in ${
-            viewMode === 'grid'
-              ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5'
-              : 'space-y-3'
-          }`}>
-            {filteredWorkspaces.map((workspace) => (
-              <WorkspaceCard
-                key={workspace.id}
-                workspace={workspace}
-                onDelete={handleDelete}
-                isOwner={workspace.owner_id === user?.id}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-20 animate-fade-in">
-            <div className="text-6xl mb-4 opacity-30">📁</div>
-            <h3 className="text-lg font-medium text-surface-400 mb-2">
-              {search ? 'No workspaces match your search' : 'No workspaces yet'}
-            </h3>
-            <p className="text-sm text-surface-600 mb-6">
-              {search ? 'Try a different search term' : 'Create your first workspace to get started'}
-            </p>
-            {!search && (
-              <Button onClick={() => setShowCreateModal(true)}>
-                <HiPlus size={18} />
-                Create Workspace
+        <div className="mt-6">
+          {error && !loading && (
+            <Alert className="mb-6">
+              Something went wrong: {error}{' '}
+              <button type="button" onClick={() => fetchWorkspaces(user.id)} className="font-medium underline underline-offset-2">
+                Try again
+              </button>
+            </Alert>
+          )}
+
+          {firstLoad ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }, (_, i) => <SkeletonCard key={i} />)}
+            </div>
+          ) : visible.length > 0 ? (
+            view === 'grid' ? (
+              <div className="grid animate-fade-in gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {visible.map((w) => (
+                  <WorkspaceCard key={w.id} workspace={w} isOwner={isOwner(w)} onDelete={setPendingDelete} />
+                ))}
+              </div>
+            ) : (
+              <ul className="card animate-fade-in divide-y divide-line overflow-hidden">
+                {visible.map((w) => (
+                  <WorkspaceRow key={w.id} workspace={w} isOwner={isOwner(w)} onDelete={setPendingDelete} />
+                ))}
+              </ul>
+            )
+          ) : workspaces.length > 0 ? (
+            <div className="card flex flex-col items-center px-6 py-16 text-center">
+              <GoSearch size={24} className="text-ink-subtle" aria-hidden="true" />
+              <h2 className="mt-4 text-headline-sm font-semibold text-ink">No matching workspaces</h2>
+              <p className="mt-2 text-body-sm text-ink-muted">
+                {search ? `Nothing matches “${search.trim()}”` : 'Nothing here yet'}
+                {filter !== 'all' && ` in ${FILTERS.find((f) => f.id === filter).label.toLowerCase()}`}.
+              </p>
+              <Button variant="secondary" className="mt-6" onClick={() => { setSearch(''); setFilter('all'); }}>
+                <GoX size={16} /> Clear filters
               </Button>
-            )}
-          </div>
-        )}
+            </div>
+          ) : (
+            <div className="card flex flex-col items-center px-6 py-20 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-soft text-brand-fg">
+                <GoRepo size={22} aria-hidden="true" />
+              </span>
+              <h2 className="mt-5 text-headline-sm font-semibold text-ink">Create your first workspace</h2>
+              <p className="mt-2 max-w-sm text-body-sm text-ink-muted">
+                A workspace holds your files and collaborators. Pick a language and you can run code in seconds.
+              </p>
+              <Button className="mt-6" onClick={() => setShowCreate(true)}>
+                <GoPlus size={16} /> New workspace
+              </Button>
+            </div>
+          )}
+        </div>
       </main>
 
-      <CreateWorkspaceModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onCreate={handleCreate}
-      />
+      <CreateWorkspaceModal isOpen={showCreate} onClose={() => setShowCreate(false)} onCreate={handleCreate} />
+
+      <ConfirmDialog
+        isOpen={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+        loading={deleting}
+        title="Delete workspace?"
+        confirmLabel="Delete workspace"
+      >
+        <p>
+          <span className="font-semibold text-ink">{pendingDelete?.name}</span> and all of its files will be permanently
+          deleted for everyone. This can't be undone.
+        </p>
+      </ConfirmDialog>
     </div>
   );
 }

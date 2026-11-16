@@ -1,116 +1,172 @@
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { HiCode, HiLogout, HiViewGrid, HiMenu, HiX } from 'react-icons/hi';
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { GoRepo, GoSignOut, GoX } from 'react-icons/go';
 import useAuthStore from '../../store/authStore';
+import useDismiss from '../../hooks/useDismiss';
+import Logo from '../ui/Logo';
+import Avatar from '../ui/Avatar';
+import ThemeMenu, { ThemeSwitcher } from '../ui/ThemeMenu';
+
+const SECTIONS = [
+  { href: '#features', label: 'Features' },
+  { href: '#how-it-works', label: 'How it works' },
+  { href: '#languages', label: 'Languages' },
+];
+
+function MenuIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M3 6h14M3 10h14M3 14h14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function UserMenu({ user, name, onSignOut }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useDismiss(ref, open, () => setOpen(false));
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Account menu"
+        className="flex rounded-full transition-opacity hover:opacity-85"
+      >
+        <Avatar name={name} id={user.id} src={user.user_metadata?.avatar_url} size={32} />
+      </button>
+      {open && (
+        <div role="menu" className="menu absolute right-0 top-full z-50 mt-2 w-64 origin-top-right animate-scale-in">
+          <div className="px-2.5 py-2">
+            <p className="truncate text-label-md text-ink">{name}</p>
+            <p className="mt-1 truncate text-body-sm text-ink-muted">{user.email}</p>
+          </div>
+          <div className="my-1 h-px bg-line" />
+          <Link role="menuitem" to="/dashboard" onClick={() => setOpen(false)} className="menu-item">
+            <GoRepo size={16} className="text-ink-muted" /> Your workspaces
+          </Link>
+          <button role="menuitem" type="button" onClick={onSignOut} className="menu-item">
+            <GoSignOut size={16} className="text-ink-muted" /> Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Navbar() {
   const { user, profile, signOut } = useAuthStore();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const { pathname } = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const isLanding = pathname === '/';
+  const name = profile?.display_name || user?.email || '';
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const handleSignOut = async () => {
-    await signOut();
-  };
-
-  const isLanding = location.pathname === '/';
+  const closeMobile = () => setMobileOpen(false);
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-      scrolled
-        ? 'bg-surface-950/80 backdrop-blur-2xl border-b border-white/[0.04] shadow-lg shadow-black/20'
-        : 'bg-transparent border-b border-transparent'
-    }`}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-accent-500 flex items-center justify-center
-              group-hover:shadow-lg group-hover:shadow-brand-500/25 transition-all duration-500">
-              <HiCode className="text-white text-lg" />
-            </div>
-            <span className="text-lg font-bold font-display gradient-text">DevSync</span>
-          </Link>
+    <header
+      className={`sticky top-0 z-40 border-b bg-canvas transition-colors duration-200 ${
+        scrolled || !isLanding ? 'border-line' : 'border-transparent'
+      }`}
+    >
+      <nav aria-label="Main" className="mx-auto flex h-16 max-w-6xl items-center gap-8 px-4 sm:px-6 lg:px-8">
+        <Link to="/" aria-label="DevSync home" className="rounded-md">
+          <Logo />
+        </Link>
 
-          {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-2">
-            {user ? (
-              <>
-                <Link to="/dashboard" className="btn-ghost flex items-center gap-2 text-sm">
-                  <HiViewGrid size={16} />
-                  Dashboard
-                </Link>
-                <div className="flex items-center gap-3 pl-3 ml-2 border-l border-white/[0.06]">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-400 to-accent-500 flex items-center justify-center text-xs font-bold text-white">
-                    {(profile?.display_name || user.email)?.[0]?.toUpperCase()}
-                  </div>
-                  <span className="text-sm text-surface-300 max-w-[120px] truncate">
-                    {profile?.display_name || user.email}
-                  </span>
-                  <button onClick={handleSignOut} className="p-2 rounded-lg text-surface-500 hover:text-red-400 hover:bg-red-500/10 transition-all duration-300" title="Sign out">
-                    <HiLogout size={16} />
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                {isLanding && (
-                  <div className="flex items-center gap-2">
-                    <Link to="/login" className="btn-ghost text-sm">Log In</Link>
-                    <Link to="/login">
-                      <button className="px-5 py-2 rounded-xl text-sm font-semibold bg-white text-black hover:bg-surface-200 transition-all duration-300 active:scale-[0.97]">
-                        Get Started
-                      </button>
-                    </Link>
-                  </div>
-                )}
-              </>
-            )}
+        {isLanding && (
+          <div className="hidden items-center gap-7 md:flex">
+            {SECTIONS.map((s) => (
+              <a key={s.href} href={s.href} className="text-label-md text-ink transition-colors hover:text-ink-muted">
+                {s.label}
+              </a>
+            ))}
           </div>
+        )}
 
-          {/* Mobile toggle */}
-          <button
-            className="md:hidden p-2 text-surface-400 hover:text-white transition-colors"
-            onClick={() => setMobileOpen(!mobileOpen)}
-          >
-            {mobileOpen ? <HiX size={24} /> : <HiMenu size={24} />}
-          </button>
+        <div className="ml-auto hidden items-center gap-2 md:flex">
+          <ThemeMenu className="mr-1" />
+          {user ? (
+            <>
+              {pathname !== '/dashboard' && (
+                <Link to="/dashboard" className="btn btn-sm btn-secondary">Dashboard</Link>
+              )}
+              <div className="ml-2">
+                <UserMenu user={user} name={name} onSignOut={signOut} />
+              </div>
+            </>
+          ) : (
+            <>
+              <Link to="/login" className="btn btn-sm btn-ghost">Sign in</Link>
+              <Link to="/login" className="btn btn-sm btn-primary">Get started</Link>
+            </>
+          )}
         </div>
-      </div>
 
-      {/* Mobile Nav */}
+        <button
+          type="button"
+          onClick={() => setMobileOpen((o) => !o)}
+          aria-expanded={mobileOpen}
+          aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+          className="icon-btn ml-auto md:hidden"
+        >
+          {mobileOpen ? <GoX size={20} /> : <MenuIcon />}
+        </button>
+      </nav>
+
       {mobileOpen && (
-        <div className="md:hidden border-t border-white/[0.04] bg-surface-950/95 backdrop-blur-2xl animate-slide-down">
-          <div className="px-4 py-4 space-y-2">
+        <div className="animate-fade-in border-t border-line bg-canvas md:hidden">
+          <div className="mx-auto max-w-6xl space-y-1 px-4 py-3 sm:px-6">
+            {isLanding &&
+              SECTIONS.map((s) => (
+                <a key={s.href} href={s.href} onClick={closeMobile} className="block rounded-md px-3 py-2.5 text-label-lg text-ink hover:bg-canvas-muted">
+                  {s.label}
+                </a>
+              ))}
+            <div className="flex items-center justify-between gap-4 px-3 py-2">
+              <span className="text-label-lg text-ink">Theme</span>
+              <ThemeSwitcher className="w-full max-w-[260px]" />
+            </div>
             {user ? (
               <>
-                <Link to="/dashboard" onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 rounded-xl hover:bg-white/5 text-surface-300 text-sm transition-colors">
-                  Dashboard
+                <div className="flex items-center gap-3 px-3 py-3">
+                  <Avatar name={name} id={user.id} src={user.user_metadata?.avatar_url} size={32} />
+                  <div className="min-w-0">
+                    <p className="truncate text-label-md text-ink">{name}</p>
+                    <p className="mt-1 truncate text-body-sm text-ink-muted">{user.email}</p>
+                  </div>
+                </div>
+                <Link to="/dashboard" onClick={closeMobile} className="block rounded-md px-3 py-2.5 text-label-lg text-ink hover:bg-canvas-muted">
+                  Your workspaces
                 </Link>
-                <button onClick={() => { handleSignOut(); setMobileOpen(false); }} className="block w-full text-left px-4 py-2.5 rounded-xl text-red-400 hover:bg-red-500/10 text-sm transition-colors">
-                  Sign Out
+                <button
+                  type="button"
+                  onClick={() => { closeMobile(); signOut(); }}
+                  className="block w-full rounded-md px-3 py-2.5 text-left text-label-lg text-ink hover:bg-canvas-muted"
+                >
+                  Sign out
                 </button>
               </>
             ) : (
-              <>
-                <Link to="/login" onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 rounded-xl hover:bg-white/5 text-surface-300 text-sm transition-colors">
-                  Log In
-                </Link>
-                <Link to="/login" onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 rounded-xl bg-white text-black text-center text-sm font-semibold">
-                  Get Started
-                </Link>
-              </>
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <Link to="/login" onClick={closeMobile} className="btn btn-md btn-secondary">Sign in</Link>
+                <Link to="/login" onClick={closeMobile} className="btn btn-md btn-primary">Get started</Link>
+              </div>
             )}
           </div>
         </div>
       )}
-    </nav>
+    </header>
   );
 }
