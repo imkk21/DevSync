@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
-import { GoPeople, GoTrash } from 'react-icons/go';
+import { GoMortarBoard, GoPeople, GoPin } from 'react-icons/go';
 import LangDot from '../ui/LangDot';
+import DropdownMenu from '../ui/DropdownMenu';
 import { getLanguage } from '../../lib/languages';
 
 export function timeAgo(dateStr) {
@@ -14,30 +15,39 @@ export function timeAgo(dateStr) {
   return new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// Owner / Shared, plus pinned and classroom markers
+function Badges({ workspace, isOwner }) {
+  return (
+    <span className="flex shrink-0 items-center gap-1.5">
+      {workspace.pinned && <GoPin size={14} className="text-ink-muted" aria-label="Pinned" />}
+      {workspace.is_classroom && <span className="badge"><GoMortarBoard size={12} aria-hidden="true" /> Classroom</span>}
+      <span className="badge">{isOwner ? 'Owner' : 'Shared'}</span>
+    </span>
+  );
+}
+
 function memberLabel(workspace) {
   const count = workspace.workspace_members?.[0]?.count || 1;
   return `${count} ${count === 1 ? 'member' : 'members'}`;
 }
 
-function DeleteButton({ workspace, onDelete }) {
+function Actions({ workspace, actions }) {
+  if (!actions?.length) return null;
   return (
-    <button
-      type="button"
-      onClick={() => onDelete(workspace)}
-      aria-label={`Delete ${workspace.name}`}
-      title="Delete workspace"
-      className="icon-btn relative z-10 h-7 w-7 hover:bg-danger-soft hover:text-danger md:opacity-0 md:focus-visible:opacity-100 md:group-hover:opacity-100"
-    >
-      <GoTrash size={14} />
-    </button>
+    <DropdownMenu
+      items={actions}
+      label={`Actions for ${workspace.name}`}
+      className="relative z-10"
+      buttonClassName="h-7 w-7 md:opacity-0 md:focus-visible:opacity-100 md:group-hover:opacity-100 md:aria-expanded:opacity-100"
+    />
   );
 }
 
-// The title link stretches over the whole card; the delete button sits above it.
+// The title link stretches over the whole card; the actions menu sits above it.
 const STRETCHED_LINK = 'after:absolute after:inset-0 after:content-[""] focus-visible:outline-none';
 const FOCUS_RING = '[&:has(a:focus-visible)]:ring-2 [&:has(a:focus-visible)]:ring-brand [&:has(a:focus-visible)]:ring-offset-2';
 
-export default function WorkspaceCard({ workspace, isOwner, onDelete }) {
+export default function WorkspaceCard({ workspace, isOwner, actions }) {
   const lang = getLanguage(workspace.default_language);
 
   return (
@@ -46,7 +56,7 @@ export default function WorkspaceCard({ workspace, isOwner, onDelete }) {
         <span className="inline-flex items-center gap-2 text-label-sm text-ink-muted">
           <LangDot language={lang.id} /> {lang.label}
         </span>
-        <span className="badge">{isOwner ? 'Owner' : 'Shared'}</span>
+        <Badges workspace={workspace} isOwner={isOwner} />
       </div>
       <h3 className="mt-3 truncate text-label-lg font-semibold text-ink">
         <Link to={`/editor/${workspace.id}`} className={`group-hover:underline group-hover:underline-offset-4 ${STRETCHED_LINK}`}>
@@ -61,27 +71,25 @@ export default function WorkspaceCard({ workspace, isOwner, onDelete }) {
           <GoPeople size={14} aria-hidden="true" /> {memberLabel(workspace)}
         </span>
         <span>Updated {timeAgo(workspace.updated_at)}</span>
-        {isOwner && (
-          <span className="ml-auto -mr-1.5">
-            <DeleteButton workspace={workspace} onDelete={onDelete} />
-          </span>
-        )}
+        <span className="ml-auto -mr-1.5">
+          <Actions workspace={workspace} actions={actions} />
+        </span>
       </div>
     </article>
   );
 }
 
-export function WorkspaceRow({ workspace, isOwner, onDelete }) {
+export function WorkspaceRow({ workspace, isOwner, actions }) {
   const lang = getLanguage(workspace.default_language);
 
   return (
-    <li className={`group relative flex items-center gap-4 px-4 py-3.5 transition-colors hover:bg-canvas-subtle ${FOCUS_RING} [&:has(a:focus-visible)]:ring-inset [&:has(a:focus-visible)]:ring-offset-0`}>
+    <li className={`group relative flex items-center gap-4 px-4 py-3.5 transition-colors first:rounded-t-lg last:rounded-b-lg hover:bg-canvas-subtle ${FOCUS_RING} [&:has(a:focus-visible)]:ring-inset [&:has(a:focus-visible)]:ring-offset-0`}>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <Link to={`/editor/${workspace.id}`} className={`truncate text-label-lg font-semibold text-ink group-hover:underline group-hover:underline-offset-4 ${STRETCHED_LINK}`}>
             {workspace.name}
           </Link>
-          <span className="badge shrink-0">{isOwner ? 'Owner' : 'Shared'}</span>
+          <Badges workspace={workspace} isOwner={isOwner} />
         </div>
         <p className={`mt-1 truncate text-body-sm ${workspace.description ? 'text-ink-muted' : 'text-ink-subtle'}`}>
           {workspace.description || 'No description'}
@@ -96,7 +104,7 @@ export function WorkspaceRow({ workspace, isOwner, onDelete }) {
         </span>
         <span className="w-28">Updated {timeAgo(workspace.updated_at)}</span>
       </div>
-      <div className="w-7 shrink-0">{isOwner && <DeleteButton workspace={workspace} onDelete={onDelete} />}</div>
+      <div className="w-7 shrink-0"><Actions workspace={workspace} actions={actions} /></div>
     </li>
   );
 }

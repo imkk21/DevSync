@@ -2,7 +2,7 @@ import { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { GoX } from 'react-icons/go';
 
-const SIZES = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl' };
+const SIZES = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-6xl' };
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export default function Modal({ isOpen, onClose, title, description, footer, size = 'md', children }) {

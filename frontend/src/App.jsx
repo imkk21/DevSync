@@ -1,18 +1,27 @@
-import { useEffect } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import useAuthStore from './store/authStore';
-import LandingPage from './pages/LandingPage';
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import EditorPage from './pages/EditorPage';
 import { PageLoader } from './components/ui/LoadingSpinner';
+
+// Each page is its own chunk, so the landing page doesn't download the editor
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const EditorPage = lazy(() => import('./pages/EditorPage'));
+const InvitePage = lazy(() => import('./pages/InvitePage'));
+const PublicPage = lazy(() => import('./pages/PublicPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const Toaster = lazy(() => import('./components/ui/Toaster')); // keeps the icon set out of the first download
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuthStore();
+  const location = useLocation();
 
   if (loading) return <PageLoader />;
 
   if (!user) {
+    // Come back here after signing in (the dashboard picks this up)
+    try { sessionStorage.setItem('devsync:return-to', location.pathname + location.search); } catch { /* storage unavailable */ }
     return <Navigate to="/login" replace />;
   }
 
@@ -40,6 +49,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-canvas">
+      <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/" element={<LandingPage />} />
 
@@ -59,9 +69,22 @@ export default function App() {
             <EditorPage />
           </ProtectedRoute>
         } />
+        <Route path="/invite/:token" element={
+          <ProtectedRoute>
+            <InvitePage />
+          </ProtectedRoute>
+        } />
+        <Route path="/settings" element={
+          <ProtectedRoute>
+            <SettingsPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/p/:token" element={<PublicPage />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
+      <Suspense fallback={null}><Toaster /></Suspense>
     </div>
   );
 }

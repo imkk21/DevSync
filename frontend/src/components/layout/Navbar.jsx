@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { GoRepo, GoSignOut, GoX } from 'react-icons/go';
+import { GoGear, GoRepo, GoSignOut, GoX } from 'react-icons/go';
 import useAuthStore from '../../store/authStore';
 import useDismiss from '../../hooks/useDismiss';
 import Logo from '../ui/Logo';
 import Avatar from '../ui/Avatar';
 import ThemeMenu, { ThemeSwitcher } from '../ui/ThemeMenu';
+import NotificationBell from './NotificationBell';
 
 const SECTIONS = [
   { href: '#features', label: 'Features' },
@@ -21,7 +22,7 @@ function MenuIcon() {
   );
 }
 
-function UserMenu({ user, name, onSignOut }) {
+function UserMenu({ user, name, avatar, onSignOut }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useDismiss(ref, open, () => setOpen(false));
@@ -36,7 +37,7 @@ function UserMenu({ user, name, onSignOut }) {
         aria-label="Account menu"
         className="flex rounded-full transition-opacity hover:opacity-85"
       >
-        <Avatar name={name} id={user.id} src={user.user_metadata?.avatar_url} size={32} />
+        <Avatar name={name} id={user.id} src={avatar} size={32} />
       </button>
       {open && (
         <div role="menu" className="menu absolute right-0 top-full z-50 mt-2 w-64 origin-top-right animate-scale-in">
@@ -47,6 +48,9 @@ function UserMenu({ user, name, onSignOut }) {
           <div className="my-1 h-px bg-line" />
           <Link role="menuitem" to="/dashboard" onClick={() => setOpen(false)} className="menu-item">
             <GoRepo size={16} className="text-ink-muted" /> Your workspaces
+          </Link>
+          <Link role="menuitem" to="/settings" onClick={() => setOpen(false)} className="menu-item">
+            <GoGear size={16} className="text-ink-muted" /> Settings
           </Link>
           <button role="menuitem" type="button" onClick={onSignOut} className="menu-item">
             <GoSignOut size={16} className="text-ink-muted" /> Sign out
@@ -64,6 +68,7 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const isLanding = pathname === '/';
   const name = profile?.display_name || user?.email || '';
+  const avatar = profile?.avatar_url || user?.user_metadata?.avatar_url;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -102,8 +107,9 @@ export default function Navbar() {
               {pathname !== '/dashboard' && (
                 <Link to="/dashboard" className="btn btn-sm btn-secondary">Dashboard</Link>
               )}
+              <NotificationBell />
               <div className="ml-2">
-                <UserMenu user={user} name={name} onSignOut={signOut} />
+                <UserMenu user={user} name={name} avatar={avatar} onSignOut={signOut} />
               </div>
             </>
           ) : (
@@ -141,7 +147,7 @@ export default function Navbar() {
             {user ? (
               <>
                 <div className="flex items-center gap-3 px-3 py-3">
-                  <Avatar name={name} id={user.id} src={user.user_metadata?.avatar_url} size={32} />
+                  <Avatar name={name} id={user.id} src={avatar} size={32} />
                   <div className="min-w-0">
                     <p className="truncate text-label-md text-ink">{name}</p>
                     <p className="mt-1 truncate text-body-sm text-ink-muted">{user.email}</p>
@@ -149,6 +155,9 @@ export default function Navbar() {
                 </div>
                 <Link to="/dashboard" onClick={closeMobile} className="block rounded-md px-3 py-2.5 text-label-lg text-ink hover:bg-canvas-muted">
                   Your workspaces
+                </Link>
+                <Link to="/settings" onClick={closeMobile} className="block rounded-md px-3 py-2.5 text-label-lg text-ink hover:bg-canvas-muted">
+                  Settings
                 </Link>
                 <button
                   type="button"

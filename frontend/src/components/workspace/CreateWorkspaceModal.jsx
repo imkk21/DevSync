@@ -6,6 +6,7 @@ import Input from '../ui/Input';
 import Alert from '../ui/Alert';
 import LangDot from '../ui/LangDot';
 import { LANGUAGES } from '../../lib/languages';
+import { TEMPLATES } from '../../lib/templates';
 
 const FORM_ID = 'create-workspace-form';
 const MAX_DESCRIPTION = 200;
@@ -14,6 +15,7 @@ export default function CreateWorkspaceModal({ isOpen, onClose, onCreate }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [language, setLanguage] = useState('javascript');
+  const [templateId, setTemplateId] = useState('blank');
   const [nameError, setNameError] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,6 +24,7 @@ export default function CreateWorkspaceModal({ isOpen, onClose, onCreate }) {
     setName('');
     setDescription('');
     setLanguage('javascript');
+    setTemplateId('blank');
     setNameError('');
     setSubmitError('');
     onClose();
@@ -35,7 +38,8 @@ export default function CreateWorkspaceModal({ isOpen, onClose, onCreate }) {
 
     setLoading(true);
     setSubmitError('');
-    const result = await onCreate(trimmed, description.trim(), language);
+    const template = TEMPLATES.find((t) => t.id === templateId);
+    const result = await onCreate(trimmed, description.trim(), template?.language || language, template);
     setLoading(false);
     if (result?.error) return setSubmitError(result.error.message || 'Could not create the workspace. Try again.');
     close();
@@ -84,6 +88,32 @@ export default function CreateWorkspaceModal({ isOpen, onClose, onCreate }) {
         </div>
 
         <fieldset>
+          <legend className="text-label-md text-ink">Start from</legend>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {[{ id: 'blank', label: 'Blank', description: 'One starter file in the language you pick' }, ...TEMPLATES].map((t) => {
+              const selected = templateId === t.id;
+              return (
+                <label
+                  key={t.id}
+                  className={`cursor-pointer rounded-md border p-3 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand has-[:focus-visible]:ring-offset-1 ${
+                    selected ? 'border-brand bg-brand-soft' : 'border-line-strong hover:border-line-emphasis hover:bg-canvas-subtle'
+                  }`}
+                >
+                  <input type="radio" name="template" value={t.id} checked={selected} onChange={() => setTemplateId(t.id)} className="sr-only" />
+                  <span className="flex items-center gap-2 text-label-md text-ink">
+                    {t.language && <LangDot language={t.language} />}
+                    {t.label}
+                    {selected && <GoCheck size={16} className="ml-auto text-brand" aria-hidden="true" />}
+                  </span>
+                  <span className="mt-1.5 block text-body-sm text-ink-muted">{t.description}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        {templateId === 'blank' && (
+        <fieldset>
           <legend className="text-label-md text-ink">Language</legend>
           <p className="mt-1.5 text-body-sm text-ink-muted">We'll add a starter file you can run straight away.</p>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -112,6 +142,7 @@ export default function CreateWorkspaceModal({ isOpen, onClose, onCreate }) {
             })}
           </div>
         </fieldset>
+        )}
 
         {submitError && <Alert>{submitError}</Alert>}
       </form>

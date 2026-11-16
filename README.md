@@ -60,6 +60,8 @@ npm install
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 VITE_API_URL=http://127.0.0.1:3001
+# Optional: error reporting
+VITE_SENTRY_DSN=
 ```
 
 **Backend** (`backend/.env`):
@@ -72,7 +74,18 @@ JUDGE0_API_URL=https://judge0-ce.p.rapidapi.com
 JUDGE0_API_KEY=your-rapidapi-key
 JUDGE0_API_HOST=judge0-ce.p.rapidapi.com
 FRONTEND_URL=http://localhost:5173
+
+# Optional. Each feature stays off until its value is set.
+RESEND_API_KEY=            # emails invites (resend.com)
+EMAIL_FROM=DevSync <invites@your-domain.com>
+UPSTASH_REDIS_REST_URL=    # shares the run rate limit across server instances
+UPSTASH_REDIS_REST_TOKEN=
+SENTRY_DSN=                # error reporting
 ```
+
+### Database
+
+Run every file in `supabase/migrations/` in the Supabase SQL Editor, in order (001 to 006).
 
 ### 4. Run Locally
 
@@ -89,6 +102,15 @@ npm run dev
 Frontend: http://localhost:5173
 Backend: http://127.0.0.1:3001
 
+## Checks
+
+```bash
+cd backend && npm run check    # real-time collaboration, end to end
+cd frontend && npm run check   # search, zip, preview and challenge helpers
+```
+
+CI (`.github/workflows/ci.yml`) runs both plus the production build on every push.
+
 ## Features
 
 - 🔐 **Authentication** — Google & GitHub OAuth via Supabase
@@ -99,6 +121,14 @@ Backend: http://127.0.0.1:3001
 - 👥 **Real-Time Collaboration** — Live sync via Supabase Realtime
 - 🟢 **Presence** — See who's online in your workspace
 - 🔒 **Row-Level Security** — Secure data isolation per workspace bypassing RLS recursion
+- ✍️ **Co-editing** — Yjs-based simultaneous editing, live cursors, offline edits, your-own undo
+- ⌨️ **Editor** — Command palette, quick open, search & replace across files, split view, Vim keys, zen mode, settings
+- 👀 **Preview** — Live HTML/CSS/JS preview with console, Markdown preview
+- 🧪 **Running** — Multi-file runs, program arguments, test cases, shared run history
+- 🕘 **History** — Automatic versions, checkpoints, diffs, restore, session replay, activity and access log
+- 🔗 **Sharing** — Invite links, email invites for new users, public read-only links, templates, duplicate, pin, archive
+- 💬 **Together** — Code comments, chat, @mentions, notifications, follow mode, pair (driver/navigator) mode
+- 🎓 **Creative** — Interview mode, classroom copies, daily challenge, code-to-image
 
 ## Supported Languages
 

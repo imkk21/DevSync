@@ -3,10 +3,15 @@ import { GoCheckCircle, GoChevronDown, GoChevronUp, GoCircleSlash, GoClock, GoCp
 import useEditorStore from '../../store/editorStore';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import Shortcut, { MOD } from '../ui/Shortcut';
+import useResizable from '../../hooks/useResizable';
+import TestsPanel from './TestsPanel';
+import RunsPanel from './RunsPanel';
 
 const TABS = [
   { id: 'output', label: 'Output' },
   { id: 'input', label: 'Input' },
+  { id: 'tests', label: 'Tests' },
+  { id: 'runs', label: 'Runs' },
 ];
 
 function Status({ output }) {
@@ -54,21 +59,33 @@ function OutputBody({ output, isRunning }) {
   );
 }
 
-export default function OutputPanel() {
-  const { output, isRunning, stdin, setStdin, setOutput } = useEditorStore();
+export default function OutputPanel({ workspaceId, readOnly }) {
+  const { output, isRunning, stdin, setStdin, args, setArgs, setOutput, testRun } = useEditorStore();
   const [collapsed, setCollapsed] = useState(false);
   const [tab, setTab] = useState('output');
+  const { size, handleProps } = useResizable({ storageKey: 'devsync:output-height', initial: 240, min: 120, max: 640, axis: 'y', direction: -1 });
 
-  // Running always brings the output into view
+  // Running always brings the output (or test results) into view
   useEffect(() => {
     if (isRunning) {
       setCollapsed(false);
       setTab('output');
     }
   }, [isRunning]);
+  useEffect(() => {
+    if (testRun?.running) {
+      setCollapsed(false);
+      setTab('tests');
+    }
+  }, [testRun?.running]);
 
   return (
-    <section aria-label="Output" className={`flex shrink-0 flex-col border-t border-line bg-canvas ${collapsed ? '' : 'h-60'}`}>
+    <section
+      aria-label="Output"
+      className="relative flex max-h-[70%] shrink-0 flex-col border-t border-line bg-canvas"
+      style={collapsed ? undefined : { height: size }}
+    >
+      {!collapsed && <div {...handleProps} aria-label="Resize output panel" className="resize-handle-y" />}
       <div className={`flex h-9 shrink-0 items-center gap-3 pl-2 pr-1.5 ${collapsed ? '' : 'border-b border-line'}`}>
         <div role="tablist" aria-label="Output panel" className="flex h-full">
           {TABS.map((t) => {
@@ -87,7 +104,7 @@ export default function OutputPanel() {
                 }`}
               >
                 {t.label}
-                {t.id === 'input' && stdin && <span className="h-1.5 w-1.5 rounded-full bg-brand" aria-label="(has input)" />}
+                {t.id === 'input' && (stdin || args) && <span className="h-1.5 w-1.5 rounded-full bg-brand" aria-label="(has input)" />}
               </button>
             );
           })}
@@ -99,10 +116,10 @@ export default function OutputPanel() {
               <LoadingSpinner size="sm" className="text-brand" /> Running
             </span>
           ) : (
-            output && <Status output={output} />
+            output && tab === 'output' && <Status output={output} />
           )}
           <div className="flex items-center">
-            {output && !isRunning && (
+            {output && !isRunning && tab === 'output' && (
               <button type="button" onClick={() => setOutput(null)} className="icon-btn h-7 w-7" aria-label="Clear output" title="Clear output">
                 <GoCircleSlash size={14} />
               </button>
@@ -123,19 +140,34 @@ export default function OutputPanel() {
 
       {!collapsed && (
         <div className="min-h-0 flex-1 overflow-auto" role="tabpanel">
-          {tab === 'output' ? (
-            <OutputBody output={output} isRunning={isRunning} />
-          ) : (
-            <div className="flex h-full flex-col p-3">
-              <label htmlFor="program-stdin" className="sr-only">Program input (stdin)</label>
-              <textarea
-                id="program-stdin"
-                value={stdin}
-                onChange={(e) => setStdin(e.target.value)}
-                placeholder="Input passed to your program on stdin, one value per line"
-                spellCheck={false}
-                className="input input-multiline min-h-0 flex-1 font-mono sm:text-code-md"
-              />
+          {tab === 'output' && <OutputBody output={output} isRunning={isRunning} />}
+          {tab === 'tests' && <TestsPanel readOnly={readOnly} />}
+          {tab === 'runs' && <RunsPanel workspaceId={workspaceId} />}
+          {tab === 'input' && (
+            <div className="flex h-full flex-col gap-3 p-3">
+              <div>
+                <label htmlFor="program-args" className="text-label-sm text-ink-muted">Command-line arguments</label>
+                <input
+                  id="program-args"
+                  value={args}
+                  onChange={(e) => setArgs(e.target.value)}
+                  placeholder="--verbose input.txt"
+                  spellCheck={false}
+                  maxLength={1000}
+                  className="input mt-1 h-9 font-mono sm:text-code-md"
+                />
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col">
+                <label htmlFor="program-stdin" className="text-label-sm text-ink-muted">Standard input</label>
+                <textarea
+                  id="program-stdin"
+                  value={stdin}
+                  onChange={(e) => setStdin(e.target.value)}
+                  placeholder="Passed to your program on stdin, one value per line"
+                  spellCheck={false}
+                  className="input input-multiline mt-1 min-h-[60px] flex-1 font-mono sm:text-code-md"
+                />
+              </div>
             </div>
           )}
         </div>

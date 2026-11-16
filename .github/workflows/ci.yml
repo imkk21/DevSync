@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      # The backend check uses the frontend's collaboration client, so install both first
+      - run: npm ci
+        working-directory: frontend
+      - run: npm ci
+        working-directory: backend
+
+      - name: Collaboration server check
+        run: npm run check
+        working-directory: backend
+      - name: Frontend helper check
+        run: npm run check
+        working-directory: frontend
+      - name: Production build
+        run: npm run build
+        working-directory: frontend

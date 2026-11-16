@@ -115,6 +115,13 @@ const useAuthStore = create((set, get) => ({
     }
   },
 
+  // { display_name, avatar_url }
+  updateProfile: async (patch) => {
+    const { data, error } = await supabase.from('profiles').update(patch).eq('id', get().user.id).select().single();
+    if (!error) set({ profile: data });
+    return { error };
+  },
+
   clearError: () => set({ error: null }),
 }));
 

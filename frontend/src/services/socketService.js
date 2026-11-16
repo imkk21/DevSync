@@ -1,16 +1,16 @@
 import { io } from 'socket.io-client';
 import { supabase } from '../lib/supabase';
+import { CollabClient } from '../lib/collab';
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 
+// One socket per open workspace; `collab` syncs the open files over it.
 class SocketService {
-  constructor() {
-    this.socket = null;
-  }
+  socket = null;
+  collab = null;
 
-  connect(workspaceId) {
-    if (this.socket) return;
-
+  connect(workspaceId, handlers) {
+    this.disconnect();
     this.socket = io(SOCKET_URL, {
       transports: ['websocket'],
       withCredentials: true,
@@ -19,42 +19,15 @@ class SocketService {
         supabase.auth.getSession().then(({ data }) => cb({ token: data.session?.access_token }));
       },
     });
-
-    this.socket.on('connect', () => {
-      console.log('🔌 Connected to Socket.io');
-      this.socket.emit('join_workspace', { workspaceId });
-    });
-
-    this.socket.on('connect_error', (error) => {
-      console.error('❌ Socket connection error:', error);
-    });
-
-    return this.socket;
+    this.collab = new CollabClient(this.socket, workspaceId, handlers);
+    return this.collab;
   }
 
   disconnect() {
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
-    }
-  }
-
-  emitCodeChange(workspaceId, fileId, content) {
-    if (this.socket) {
-      this.socket.emit('code_change', { workspaceId, fileId, content });
-    }
-  }
-
-  onCodeUpdate(callback) {
-    if (this.socket) {
-      this.socket.on('code_update', callback);
-    }
-  }
-
-  onPresenceUpdate(callback) {
-    if (this.socket) {
-      this.socket.on('presence_update', callback);
-    }
+    this.collab?.destroy();
+    this.socket?.disconnect();
+    this.socket = null;
+    this.collab = null;
   }
 }
 

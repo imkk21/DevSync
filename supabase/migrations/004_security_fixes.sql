@@ -58,10 +58,6 @@ CREATE POLICY "Profiles visible to self and co-members"
 -- 4. Profiles: email is locked to the auth email (invites look users up by it).
 DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
 
-CREATE POLICY "Users can insert own profile"
-  ON profiles FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = id AND email = auth.email());
-
+  
 REVOKE UPDATE ON profiles FROM anon, authenticated;
 GRANT UPDATE (display_name, avatar_url) ON profiles TO authenticated;

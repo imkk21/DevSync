@@ -164,6 +164,12 @@
 
   .skeleton { @apply animate-pulse rounded-md bg-canvas-muted; }
 
+  /* Drag handles on panel edges (hooks/useResizable.js): a wide hit area, a thin line on hover */
+  .resize-handle-x,
+  .resize-handle-y { @apply absolute z-10 outline-none transition-colors delay-75 hover:bg-brand/40 focus-visible:bg-brand; }
+  .resize-handle-x { @apply inset-y-0 -right-[3px] w-1.5 cursor-col-resize; }
+  .resize-handle-y { @apply inset-x-0 -top-[3px] h-1.5 cursor-row-resize; }
+
   /* Scroll reveal on the landing page */
   .reveal {
     opacity: 0;
@@ -179,4 +185,47 @@
 @layer utilities {
   .no-scrollbar { scrollbar-width: none; }
   .no-scrollbar::-webkit-scrollbar { display: none; }
+}
+
+/* Remote cursors in the code editor (colours per person come from lib/monacoBinding.js) */
+.rc-caret {
+  position: relative;
+  margin-left: -1px;
+  border-left: 2px solid var(--rc);
+}
+.rc-caret::after {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  z-index: 10;
+  padding: 0 4px;
+  border-radius: 3px 3px 3px 0;
+  background: var(--rc);
+  color: rgb(var(--canvas));
+  font: 500 11px/16px 'Mona Sans', system-ui, sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity 300ms;
+}
+.rc-caret.rc-idle::after { opacity: 0; }
+.rc-caret.rc-below::after {
+  top: 100%;
+  bottom: auto;
+  border-radius: 0 3px 3px 3px;
+}
+
+/* Comment markers in the editor gutter (CodeEditor) */
+.comment-marker {
+  cursor: pointer;
+}
+.comment-marker::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 2px 2px 2px 0;
+  background: rgb(var(--brand));
 }

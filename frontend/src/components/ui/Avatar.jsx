@@ -4,10 +4,14 @@ import { useState } from 'react';
 // The six tones are CSS variables (index.css), so they adapt to dark mode.
 const TONE_COUNT = 6;
 
-export function toneFor(key = '') {
+export function toneIndex(key = '') {
   let hash = 0;
   for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0;
-  const n = Math.abs(hash) % TONE_COUNT;
+  return Math.abs(hash) % TONE_COUNT;
+}
+
+export function toneFor(key = '') {
+  const n = toneIndex(key);
   return [`rgb(var(--tone-${n}-bg))`, `rgb(var(--tone-${n}-fg))`];
 }
 
