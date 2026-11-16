@@ -1,9 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import {
-  HiCode, HiArrowLeft, HiCog, HiUserAdd, HiUsers,
-  HiSave, HiDownload,
-} from 'react-icons/hi';
+import { useParams, Link } from 'react-router-dom';
+import { HiCode, HiArrowLeft, HiUserAdd, HiSave } from 'react-icons/hi';
 import useAuthStore from '../store/authStore';
 import useEditorStore from '../store/editorStore';
 import useWorkspaceStore from '../store/workspaceStore';
@@ -12,34 +9,27 @@ import FileTree from '../components/editor/FileTree';
 import EditorTabs from '../components/editor/EditorTabs';
 import CodeEditor from '../components/editor/CodeEditor';
 import OutputPanel from '../components/editor/OutputPanel';
-import PresenceBar from '../components/editor/PresenceBar';
 import InviteMemberModal from '../components/workspace/InviteMemberModal';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { socketService } from '../services/socketService';
-import { supabase } from '../lib/supabase';
 
 export default function EditorPage() {
   const { workspaceId } = useParams();
-  const navigate = useNavigate();
-  const { user, profile } = useAuthStore();
-  const { fetchFiles, activeFile, saveFile, editorContent, language } = useEditorStore();
+  const { user } = useAuthStore();
+  const { fetchFiles, activeFile, saveFile, editorContent } = useEditorStore();
   const { currentWorkspace, members, fetchWorkspace, inviteMember } = useWorkspaceStore();
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const channelRef = useRef(null);
   const activeFileRef = useRef(activeFile);
-  const userRef = useRef(user);
 
-  // Keep refs in sync
+  const isOwner = !!user && currentWorkspace?.owner_id === user.id;
+  const readOnly = members.find((m) => m.user_id === user?.id)?.role === 'viewer';
+
+  // Keep ref in sync
   useEffect(() => {
     activeFileRef.current = activeFile;
   }, [activeFile]);
-
-  useEffect(() => {
-    userRef.current = user;
-  }, [user]);
 
   // Fetch workspace and files
   useEffect(() => {
@@ -56,46 +46,30 @@ export default function EditorPage() {
   useEffect(() => {
     if (!user || !workspaceId) return;
 
-    const userObj = {
-      id: user.id,
-      display_name: profile?.display_name || user.email,
-      email: user.email,
-    };
-
-    const socket = socketService.connect(workspaceId, userObj);
+    socketService.connect(workspaceId);
 
     socketService.onPresenceUpdate((users) => {
       setOnlineUsers(users);
     });
 
-    socketService.onCodeUpdate(({ fileId, content, userId }) => {
-      const currentActiveFile = activeFileRef.current;
-      const currentUser = userRef.current;
-
-      // Only apply if it's the current file and not from the current user
-      if (fileId === currentActiveFile?.id && userId !== currentUser?.id) {
-        useEditorStore.getState().setEditorContent(content);
-      }
+    // Server never echoes back to the sending socket. Apply to every copy of the file,
+    // not just the active one, so tabs never hold stale content.
+    socketService.onCodeUpdate(({ fileId, content }) => {
+      useEditorStore.getState().setFileContent(fileId, content);
     });
 
     return () => {
       socketService.disconnect();
     };
-  }, [user?.id, workspaceId, profile?.display_name]);
+  }, [user?.id, workspaceId]);
 
   // Broadcast content changes via Socket.io
   const handleContentChange = useCallback(
     (content) => {
       const currentActiveFile = activeFileRef.current;
-      const currentUser = userRef.current;
 
-      if (currentActiveFile && currentUser) {
-        socketService.emitCodeChange(
-          workspaceId,
-          currentActiveFile.id,
-          content,
-          currentUser.id
-        );
+      if (currentActiveFile) {
+        socketService.emitCodeChange(workspaceId, currentActiveFile.id, content);
       }
     },
     [workspaceId]
@@ -153,7 +127,7 @@ export default function EditorPage() {
         <div className="flex items-center gap-1.5">
           <button
             onClick={handleSave}
-            disabled={!activeFile}
+            disabled={!activeFile || readOnly}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-surface-400
               hover:text-white hover:bg-surface-800 transition-colors disabled:opacity-50"
             title="Save (Ctrl+S)"
@@ -162,14 +136,22 @@ export default function EditorPage() {
             <span className="hidden sm:inline">Save</span>
           </button>
 
-          <button
-            onClick={() => setShowInviteModal(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-surface-400
-              hover:text-white hover:bg-surface-800 transition-colors"
-          >
-            <HiUserAdd size={14} />
-            <span className="hidden sm:inline">Invite</span>
-          </button>
+          {isOwner && (
+            <button
+              onClick={() => setShowInviteModal(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-surface-400
+                hover:text-white hover:bg-surface-800 transition-colors"
+            >
+              <HiUserAdd size={14} />
+              <span className="hidden sm:inline">Invite</span>
+            </button>
+          )}
+
+          {readOnly && (
+            <span className="px-2 py-1 rounded text-[10px] font-semibold uppercase text-amber-400 bg-amber-500/10">
+              View only
+            </span>
+          )}
 
           <div className="w-px h-5 bg-surface-800 mx-1" />
 
@@ -199,14 +181,14 @@ export default function EditorPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* File Sidebar */}
         <Sidebar>
-          <FileTree workspaceId={workspaceId} userId={user?.id} />
+          <FileTree workspaceId={workspaceId} userId={user?.id} readOnly={readOnly} />
         </Sidebar>
 
         {/* Editor + Output */}
         <div className="flex-1 flex flex-col overflow-hidden">
           <EditorTabs />
           <div className="flex-1 overflow-hidden">
-            <CodeEditor onContentChange={handleContentChange} />
+            <CodeEditor onContentChange={handleContentChange} readOnly={readOnly} />
           </div>
           <OutputPanel />
         </div>

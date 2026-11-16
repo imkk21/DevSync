@@ -199,6 +199,16 @@ export async function inviteMember(req, res) {
       return res.status(400).json({ message: 'Invalid role' });
     }
 
+    const { data: workspace } = await supabaseAdmin
+      .from('workspaces')
+      .select('owner_id')
+      .eq('id', id)
+      .single();
+
+    if (!workspace || workspace.owner_id !== req.user.id) {
+      return res.status(403).json({ message: 'Only the owner can invite members' });
+    }
+
     // Find user by email
     const { data: profile, error: profileErr } = await supabaseAdmin
       .from('profiles')

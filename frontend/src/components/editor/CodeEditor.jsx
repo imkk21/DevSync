@@ -3,7 +3,7 @@ import Editor from '@monaco-editor/react';
 import useEditorStore from '../../store/editorStore';
 import LoadingSpinner from '../ui/LoadingSpinner';
 
-export default function CodeEditor({ onContentChange }) {
+export default function CodeEditor({ onContentChange, readOnly = false }) {
   const { activeFile, editorContent, language, theme, fontSize, setEditorContent, saveFile } = useEditorStore();
   const editorRef = useRef(null);
   const saveTimeoutRef = useRef(null);
@@ -18,9 +18,10 @@ export default function CodeEditor({ onContentChange }) {
       label: 'Save File',
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
       run: () => {
-        const currentContent = editor.getValue();
-        if (activeFile) {
-          saveFile(activeFile.id, currentContent);
+        // Read from the store, not the closure: this action is registered once on mount
+        const { activeFile: current } = useEditorStore.getState();
+        if (current && !editor.getOption(monaco.editor.EditorOption.readOnly)) {
+          saveFile(current.id, editor.getValue());
         }
       },
     });
@@ -30,6 +31,10 @@ export default function CodeEditor({ onContentChange }) {
 
   const handleChange = useCallback((value) => {
     setEditorContent(value || '');
+
+    // In read-only mode Monaco still fires onChange when a remote update is applied.
+    // Never rebroadcast or save those.
+    if (readOnly) return;
 
     // Throttled broadcast for realtime collab (100ms)
     // This prevents hitting Supabase rate limits/payload limits during fast typing
@@ -51,7 +56,7 @@ export default function CodeEditor({ onContentChange }) {
         saveFile(activeFile.id, value || '');
       }
     }, 2000);
-  }, [activeFile, onContentChange, saveFile, setEditorContent]);
+  }, [activeFile, onContentChange, saveFile, setEditorContent, readOnly]);
 
   const getMonacoLanguage = (lang) => {
     const map = {
@@ -90,6 +95,7 @@ export default function CodeEditor({ onContentChange }) {
           </div>
         }
         options={{
+          readOnly,
           fontSize,
           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
           fontLigatures: true,

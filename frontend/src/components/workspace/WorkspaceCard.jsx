@@ -15,7 +15,7 @@ const languageColors = {
   csharp: 'from-green-400 to-teal-600',
 };
 
-export default function WorkspaceCard({ workspace, onDelete }) {
+export default function WorkspaceCard({ workspace, onDelete, isOwner }) {
   const navigate = useNavigate();
   const memberCount = workspace.workspace_members?.[0]?.count || 1;
   const lang = workspace.default_language || 'javascript';
@@ -43,16 +43,18 @@ export default function WorkspaceCard({ workspace, onDelete }) {
         <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${gradientClass} flex items-center justify-center shadow-lg`}>
           <HiCode className="text-white text-lg" />
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete?.(workspace.id);
-          }}
-          className="p-1.5 rounded-lg text-surface-600 opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-500/10 transition-all"
-          title="Delete workspace"
-        >
-          <HiTrash size={16} />
-        </button>
+        {isOwner && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete?.(workspace.id);
+            }}
+            className="p-1.5 rounded-lg text-surface-600 opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-500/10 transition-all"
+            title="Delete workspace"
+          >
+            <HiTrash size={16} />
+          </button>
+        )}
       </div>
 
       <h3 className="text-base font-semibold text-white mb-1 group-hover:text-brand-300 transition-colors">

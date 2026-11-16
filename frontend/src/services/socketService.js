@@ -1,4 +1,5 @@
 import { io } from 'socket.io-client';
+import { supabase } from '../lib/supabase';
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 
@@ -7,17 +8,21 @@ class SocketService {
     this.socket = null;
   }
 
-  connect(workspaceId, user) {
+  connect(workspaceId) {
     if (this.socket) return;
 
     this.socket = io(SOCKET_URL, {
       transports: ['websocket'],
       withCredentials: true,
+      // Called on every (re)connect, so a refreshed token is always used
+      auth: (cb) => {
+        supabase.auth.getSession().then(({ data }) => cb({ token: data.session?.access_token }));
+      },
     });
 
     this.socket.on('connect', () => {
       console.log('🔌 Connected to Socket.io');
-      this.socket.emit('join_workspace', { workspaceId, user });
+      this.socket.emit('join_workspace', { workspaceId });
     });
 
     this.socket.on('connect_error', (error) => {
@@ -34,9 +39,9 @@ class SocketService {
     }
   }
 
-  emitCodeChange(workspaceId, fileId, content, userId) {
+  emitCodeChange(workspaceId, fileId, content) {
     if (this.socket) {
-      this.socket.emit('code_change', { workspaceId, fileId, content, userId });
+      this.socket.emit('code_change', { workspaceId, fileId, content });
     }
   }
 

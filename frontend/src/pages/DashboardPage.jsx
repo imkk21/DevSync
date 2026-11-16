@@ -3,7 +3,6 @@ import { HiPlus, HiSearch, HiViewGrid, HiViewList, HiRefresh } from 'react-icons
 import Navbar from '../components/layout/Navbar';
 import WorkspaceCard from '../components/workspace/WorkspaceCard';
 import CreateWorkspaceModal from '../components/workspace/CreateWorkspaceModal';
-import InviteMemberModal from '../components/workspace/InviteMemberModal';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import Button from '../components/ui/Button';
 import useAuthStore from '../store/authStore';
@@ -11,10 +10,8 @@ import useWorkspaceStore from '../store/workspaceStore';
 
 export default function DashboardPage() {
   const { user, profile } = useAuthStore();
-  const { workspaces, loading, fetchWorkspaces, createWorkspace, deleteWorkspace, inviteMember } = useWorkspaceStore();
+  const { workspaces, loading, fetchWorkspaces, createWorkspace, deleteWorkspace } = useWorkspaceStore();
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(null);
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState('grid');
 
@@ -32,10 +29,6 @@ export default function DashboardPage() {
     if (window.confirm('Are you sure you want to delete this workspace? This action cannot be undone.')) {
       await deleteWorkspace(id);
     }
-  };
-
-  const handleInvite = async (email, role) => {
-    return await inviteMember(selectedWorkspaceId, email, role);
   };
 
   const filteredWorkspaces = workspaces.filter((w) =>
@@ -114,6 +107,7 @@ export default function DashboardPage() {
                 key={workspace.id}
                 workspace={workspace}
                 onDelete={handleDelete}
+                isOwner={workspace.owner_id === user?.id}
               />
             ))}
           </div>
@@ -140,12 +134,6 @@ export default function DashboardPage() {
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onCreate={handleCreate}
-      />
-
-      <InviteMemberModal
-        isOpen={showInviteModal}
-        onClose={() => setShowInviteModal(false)}
-        onInvite={handleInvite}
       />
     </div>
   );

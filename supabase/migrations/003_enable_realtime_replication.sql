@@ -1,9 +1,10 @@
 -- 003_enable_realtime_replication.sql
--- This tells Supabase to "Publish" changes on the files table to its Realtime engine.
--- Without this, Supabase will not notify other users when a file is saved!
+-- Publishes changes on the files table to Supabase Realtime.
+-- 001 already does this; the guard makes re-running safe instead of erroring.
 
--- Enable replication for the 'files' table
-ALTER PUBLICATION supabase_realtime ADD TABLE files;
-
--- Optional: If you want to sync workspace memberships (e.g. for presence), do it too
--- ALTER PUBLICATION supabase_realtime ADD TABLE workspace_members;
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE files;
+EXCEPTION WHEN duplicate_object THEN
+  NULL; -- already published
+END $$;

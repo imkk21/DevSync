@@ -44,6 +44,7 @@ npm install
 2. Go to **SQL Editor** and run the migrations in order:
    - Copy contents of `supabase/migrations/001_initial_schema.sql` and run it.
    - Copy contents of `supabase/migrations/002_fix_rls_recursion.sql` and run it.
+   - Copy contents of `supabase/migrations/004_security_fixes.sql` and run it.
 3. Go to **Authentication > Providers** and configure:
    - **Google**: Add your Client ID & Secret from Google Cloud Console.
    - **GitHub**: Add your Client ID & Secret from GitHub Developer Settings.

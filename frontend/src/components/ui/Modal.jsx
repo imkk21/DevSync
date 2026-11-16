@@ -1,9 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { HiX } from 'react-icons/hi';
 
 export default function Modal({ isOpen, onClose, title, children, size = 'md' }) {
-  const overlayRef = useRef(null);
-
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape') onClose();
@@ -28,12 +26,8 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' })
   };
 
   return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      onClick={(e) => e.target === overlayRef.current && onClose()}
-    >
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className={`relative glass rounded-2xl w-full ${sizeClasses[size]} animate-scale-in`}>
         <div className="flex items-center justify-between p-6 border-b border-surface-800">
           <h2 className="text-lg font-semibold text-white">{title}</h2>

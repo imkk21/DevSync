@@ -5,7 +5,7 @@ import {
 } from 'react-icons/hi';
 import useEditorStore from '../../store/editorStore';
 
-const fileIcons = {
+export const fileIcons = {
   js: '🟨', jsx: '⚛️', ts: '🔷', tsx: '⚛️', py: '🐍',
   java: '☕', c: '⚙️', cpp: '⚡', go: '🐹', rs: '🦀',
   rb: '💎', php: '🐘', cs: '🎯', html: '🌐', css: '🎨',
@@ -83,7 +83,7 @@ function FileItem({ file, files, depth = 0, onContextMenu }) {
   );
 }
 
-export default function FileTree({ workspaceId, userId }) {
+export default function FileTree({ workspaceId, userId, readOnly = false }) {
   const { files, createFile, deleteFile, renameFile } = useEditorStore();
   const [contextMenu, setContextMenu] = useState(null);
   const [showNewFile, setShowNewFile] = useState(false);
@@ -100,6 +100,7 @@ export default function FileTree({ workspaceId, userId }) {
   const handleContextMenu = (e, file) => {
     e.preventDefault();
     e.stopPropagation();
+    if (readOnly) return;
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
@@ -147,7 +148,7 @@ export default function FileTree({ workspaceId, userId }) {
     <div className="flex flex-col h-full" onClick={() => setContextMenu(null)}>
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-surface-800">
         <span className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Explorer</span>
-        <div className="flex gap-1">
+        <div className={`flex gap-1 ${readOnly ? 'hidden' : ''}`}>
           <button
             onClick={() => handleCreateFile(false)}
             className="p-1 rounded text-surface-500 hover:text-brand-400 hover:bg-surface-800 transition-colors"
@@ -196,12 +197,12 @@ export default function FileTree({ workspaceId, userId }) {
         {rootFiles.length === 0 && !showNewFile && (
           <div className="px-3 py-4 text-center">
             <p className="text-xs text-surface-600">No files yet</p>
-            <button
+            {!readOnly && <button
               onClick={() => handleCreateFile(false)}
               className="text-xs text-brand-400 hover:text-brand-300 mt-1"
             >
               Create a file
-            </button>
+            </button>}
           </div>
         )}
       </div>

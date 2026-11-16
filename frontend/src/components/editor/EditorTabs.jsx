@@ -1,12 +1,6 @@
 import { HiX } from 'react-icons/hi';
 import useEditorStore from '../../store/editorStore';
-
-const fileIcons = {
-  js: '🟨', jsx: '⚛️', ts: '🔷', tsx: '⚛️', py: '🐍',
-  java: '☕', c: '⚙️', cpp: '⚡', go: '🐹', rs: '🦀',
-  rb: '💎', php: '🐘', cs: '🎯', html: '🌐', css: '🎨',
-  json: '📋', md: '📝', txt: '📄',
-};
+import { fileIcons } from './FileTree';
 
 export default function EditorTabs() {
   const { openFiles, activeFileId, openFile, closeFile } = useEditorStore();

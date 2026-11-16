@@ -18,7 +18,7 @@ const LANGUAGES = [
 ];
 
 export default function OutputPanel() {
-  const { editorContent, language, output, isRunning, stdin, setOutput, setIsRunning, setStdin } = useEditorStore();
+  const { activeFile, editorContent, language, output, isRunning, stdin, setOutput, setIsRunning, setStdin } = useEditorStore();
   const [collapsed, setCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState('output');
 
@@ -30,7 +30,7 @@ export default function OutputPanel() {
     setActiveTab('output');
 
     try {
-      const response = await compilerService.run(editorContent, currentLang.judge0Id, stdin);
+      const response = await compilerService.run(editorContent, currentLang.judge0Id, stdin, activeFile?.workspace_id, activeFile?.id);
 
       setOutput(response.data);
     } catch (error) {
@@ -115,10 +115,10 @@ export default function OutputPanel() {
               ) : output ? (
                 <>
                   {output.compile_output && (
-                    <div className="text-yellow-400 mb-2 whitespace-pre-wrap">{atob(output.compile_output)}</div>
+                    <div className="text-yellow-400 mb-2 whitespace-pre-wrap">{output.compile_output}</div>
                   )}
                   {output.stdout && (
-                    <div className="text-emerald-300 whitespace-pre-wrap">{typeof output.stdout === 'string' && output.stdout.startsWith('base64:') ? output.stdout : output.stdout}</div>
+                    <div className="text-emerald-300 whitespace-pre-wrap">{output.stdout}</div>
                   )}
                   {output.stderr && (
                     <div className="text-red-400 whitespace-pre-wrap">{output.stderr}</div>

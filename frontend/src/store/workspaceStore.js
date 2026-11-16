@@ -138,28 +138,4 @@ const useWorkspaceStore = create((set, get) => ({
   clearError: () => set({ error: null }),
 }));
 
-function getExtension(language) {
-  const map = {
-    javascript: 'js', typescript: 'ts', python: 'py',
-    java: 'java', c: 'c', cpp: 'cpp', go: 'go',
-    rust: 'rs', ruby: 'rb', php: 'php', csharp: 'cs',
-  };
-  return map[language] || 'txt';
-}
-
-function getDefaultContent(language) {
-  const templates = {
-    javascript: '// Welcome to DevSync!\nconsole.log("Hello, World!");\n',
-    typescript: '// Welcome to DevSync!\nconsole.log("Hello, World!");\n',
-    python: '# Welcome to DevSync!\nprint("Hello, World!")\n',
-    java: '// Welcome to DevSync!\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, World!");\n    }\n}\n',
-    c: '// Welcome to DevSync!\n#include <stdio.h>\n\nint main() {\n    printf("Hello, World!\\n");\n    return 0;\n}\n',
-    cpp: '// Welcome to DevSync!\n#include <iostream>\n\nint main() {\n    std::cout << "Hello, World!" << std::endl;\n    return 0;\n}\n',
-    python: '# Welcome to DevSync!\nprint("Hello, World!")\n',
-    go: '// Welcome to DevSync!\npackage main\n\nimport "fmt"\n\nfunc main() {\n    fmt.Println("Hello, World!")\n}\n',
-    rust: '// Welcome to DevSync!\nfn main() {\n    println!("Hello, World!");\n}\n',
-  };
-  return templates[language] || '// Welcome to DevSync!\n';
-}
-
 export default useWorkspaceStore;

@@ -1,6 +1,21 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 
+// A file's id plus the ids of everything nested under it. Parents always come before children.
+export function withDescendants(files, id) {
+  const ids = new Set([id]);
+  for (let added = true; added; ) {
+    added = false;
+    for (const f of files) {
+      if (ids.has(f.parent_id) && !ids.has(f.id)) {
+        ids.add(f.id);
+        added = true;
+      }
+    }
+  }
+  return ids;
+}
+
 const useEditorStore = create((set, get) => ({
   files: [],
   openFiles: [],
@@ -74,32 +89,28 @@ const useEditorStore = create((set, get) => ({
   },
 
   setEditorContent: (content) => {
-    set({ editorContent: content });
+    get().setFileContent(get().activeFileId, content);
   },
 
+  // Keeps every copy of a file's content current (local typing and remote updates),
+  // so switching tabs never brings back stale content.
+  setFileContent: (fileId, content) => {
+    const patch = (f) => (f.id === fileId ? { ...f, content } : f);
+    set({
+      files: get().files.map(patch),
+      openFiles: get().openFiles.map(patch),
+      ...(get().activeFileId === fileId && { editorContent: content }),
+    });
+  },
+
+  // Only persists; local state is already current via setFileContent.
   saveFile: async (fileId, content) => {
-    try {
-      const { error } = await supabase
-        .from('files')
-        .update({ content, updated_at: new Date().toISOString() })
-        .eq('id', fileId);
+    const { error } = await supabase
+      .from('files')
+      .update({ content, updated_at: new Date().toISOString() })
+      .eq('id', fileId);
 
-      if (error) throw error;
-
-      const files = get().files.map((f) =>
-        f.id === fileId ? { ...f, content } : f
-      );
-      const openFiles = get().openFiles.map((f) =>
-        f.id === fileId ? { ...f, content } : f
-      );
-      const activeFile = get().activeFile?.id === fileId
-        ? { ...get().activeFile, content }
-        : get().activeFile;
-
-      set({ files, openFiles, activeFile });
-    } catch (error) {
-      console.error('Save failed:', error);
-    }
+    if (error) console.error('Save failed:', error);
   },
 
   createFile: async (workspaceId, name, parentId = null, isFolder = false, userId) => {
@@ -149,12 +160,14 @@ const useEditorStore = create((set, get) => ({
 
       if (error) throw error;
 
-      const files = get().files.filter((f) => f.id !== fileId && f.parent_id !== fileId);
-      const openFiles = get().openFiles.filter((f) => f.id !== fileId);
+      // The DB cascades to everything nested under it; mirror that locally
+      const gone = withDescendants(get().files, fileId);
+      const files = get().files.filter((f) => !gone.has(f.id));
+      const openFiles = get().openFiles.filter((f) => !gone.has(f.id));
 
       set({ files, openFiles });
 
-      if (get().activeFileId === fileId) {
+      if (gone.has(get().activeFileId)) {
         if (openFiles.length > 0) {
           const last = openFiles[openFiles.length - 1];
           set({ activeFileId: last.id, activeFile: last, editorContent: last.content || '' });
@@ -169,28 +182,26 @@ const useEditorStore = create((set, get) => ({
 
   renameFile: async (fileId, newName) => {
     try {
-      const file = get().files.find((f) => f.id === fileId);
-      if (!file) return;
+      const byId = new Map(get().files.map((f) => [f.id, { id: f.id, parent_id: f.parent_id, name: f.name, path: f.path }]));
+      if (!byId.has(fileId)) return;
+      byId.get(fileId).name = newName;
 
-      const pathParts = file.path.split('/');
-      pathParts[pathParts.length - 1] = newName;
-      const newPath = pathParts.join('/');
+      // Recompute paths for the item and everything under it (parents come first)
+      const ids = withDescendants(get().files, fileId);
+      for (const id of ids) {
+        const f = byId.get(id);
+        f.path = `${byId.get(f.parent_id)?.path || ''}/${f.name}`;
+      }
 
-      const { error } = await supabase
-        .from('files')
-        .update({ name: newName, path: newPath })
-        .eq('id', fileId);
+      // ponytail: one update per row, not atomic. Move to a Postgres function if partial renames show up.
+      const results = await Promise.all([...ids].map((id) =>
+        supabase.from('files').update({ name: byId.get(id).name, path: byId.get(id).path }).eq('id', id)
+      ));
+      const failed = results.find((r) => r.error);
+      if (failed) throw failed.error;
 
-      if (error) throw error;
-
-      const files = get().files.map((f) =>
-        f.id === fileId ? { ...f, name: newName, path: newPath } : f
-      );
-      const openFiles = get().openFiles.map((f) =>
-        f.id === fileId ? { ...f, name: newName, path: newPath } : f
-      );
-
-      set({ files, openFiles });
+      const patch = (f) => (ids.has(f.id) ? { ...f, name: byId.get(f.id).name, path: byId.get(f.id).path } : f);
+      set({ files: get().files.map(patch), openFiles: get().openFiles.map(patch) });
     } catch (error) {
       console.error('Rename failed:', error);
     }
