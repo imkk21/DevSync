@@ -11,6 +11,9 @@ const EditorPage = lazy(() => import('./pages/EditorPage'));
 const InvitePage = lazy(() => import('./pages/InvitePage'));
 const PublicPage = lazy(() => import('./pages/PublicPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const WallPage = lazy(() => import('./pages/WallPage'));
+const MoviePage = lazy(() => import('./pages/MoviePage'));
+const EmbedPage = lazy(() => import('./pages/EmbedPage'));
 const Toaster = lazy(() => import('./components/ui/Toaster')); // keeps the icon set out of the first download
 
 function ProtectedRoute({ children }) {
@@ -69,6 +72,11 @@ export default function App() {
             <EditorPage />
           </ProtectedRoute>
         } />
+        <Route path="/editor/:workspaceId/wall" element={
+          <ProtectedRoute>
+            <WallPage />
+          </ProtectedRoute>
+        } />
         <Route path="/invite/:token" element={
           <ProtectedRoute>
             <InvitePage />
@@ -80,6 +88,8 @@ export default function App() {
           </ProtectedRoute>
         } />
         <Route path="/p/:token" element={<PublicPage />} />
+        <Route path="/movie/:token/:fileId" element={<MoviePage />} />
+        <Route path="/embed/:token" element={<EmbedPage />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

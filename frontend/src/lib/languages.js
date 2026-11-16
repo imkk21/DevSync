@@ -21,11 +21,12 @@ const OTHER = [
   { id: 'css', label: 'CSS', ext: 'css', color: '#663399' },
   { id: 'json', label: 'JSON', ext: 'json', color: '#292929' },
   { id: 'markdown', label: 'Markdown', ext: 'md', color: '#083FA1' },
+  { id: 'mermaid', label: 'Mermaid diagram', ext: 'mmd', color: '#FF3670' },
 ];
 
 const PLAINTEXT = { id: 'plaintext', label: 'Plain text', ext: 'txt', color: '#D2D9D4' };
 const ALL = [...LANGUAGES, ...OTHER, PLAINTEXT];
-const ALIASES = { jsx: 'javascript', mjs: 'javascript', cjs: 'javascript', tsx: 'typescript', h: 'c', hpp: 'cpp', cc: 'cpp', htm: 'html' };
+const ALIASES = { jsx: 'javascript', mjs: 'javascript', cjs: 'javascript', tsx: 'typescript', h: 'c', hpp: 'cpp', cc: 'cpp', htm: 'html', mermaid: 'mermaid' };
 
 export function getLanguage(id) {
   return ALL.find((l) => l.id === id) || PLAINTEXT;

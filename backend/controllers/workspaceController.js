@@ -54,7 +54,7 @@ export async function insertTree(workspaceId, userId, entries) {
 }
 
 // Create a workspace owned by `userId` with its files and tests: { files: [...], tests: [{ path, input, expected_output }] }
-async function createWithFiles(userId, fields, files, tests = []) {
+export async function createWithFiles(userId, fields, files, tests = []) {
   const { data: workspace, error } = await supabaseAdmin.from('workspaces').insert({ ...fields, owner_id: userId }).select().single();
   if (error) throw error;
   await supabaseAdmin.from('workspace_members').insert({ workspace_id: workspace.id, user_id: userId, role: 'owner' });
@@ -67,7 +67,7 @@ async function createWithFiles(userId, fields, files, tests = []) {
 }
 
 // All files of a workspace with their latest text, plus tests keyed by path
-async function readTree(workspaceId) {
+export async function readTree(workspaceId) {
   const { data: files, error } = await supabaseAdmin
     .from('files').select('id, path, is_folder, language, content').eq('workspace_id', workspaceId);
   if (error) throw error;
@@ -80,7 +80,7 @@ async function readTree(workspaceId) {
   };
 }
 
-async function quotaError(userId) {
+export async function quotaError(userId) {
   return (await ownedWorkspaceCount(userId)) >= QUOTA.ownedWorkspaces
     ? `You can own up to ${QUOTA.ownedWorkspaces} workspaces. Delete one to make room.`
     : null;
@@ -262,13 +262,13 @@ export async function getPublicWorkspace(req, res) {
     const { token } = req.params;
     if (!token || token.length < 16) return res.status(404).json({ message: 'Link not found' });
     const { data: workspace } = await supabaseAdmin
-      .from('workspaces').select('id, name, description, default_language, updated_at').eq('public_token', token).maybeSingle();
+      .from('workspaces').select('id, name, description, default_language, updated_at, owner_id').eq('public_token', token).maybeSingle();
     if (!workspace) return res.status(404).json({ message: 'This link is no longer shared' });
     const { data: files, error } = await supabaseAdmin
       .from('files').select('id, name, path, is_folder, parent_id, language, content').eq('workspace_id', workspace.id);
     if (error) throw error;
-    const { id: _, ...publicFields } = workspace;
-    res.json({ workspace: publicFields, files });
+    // The id lets the live view join the workspace as a read-only spectator
+    res.json({ workspace, files });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

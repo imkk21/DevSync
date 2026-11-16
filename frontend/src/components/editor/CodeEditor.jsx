@@ -11,6 +11,12 @@ import { bindModel, showRemoteCursors } from '../../lib/monacoBinding';
 import { socketService } from '../../services/socketService';
 import { toast } from '../../store/toastStore';
 import { languageForFile } from '../../lib/languages';
+import useWorkspaceStore from '../../store/workspaceStore';
+import useAuthStore from '../../store/authStore';
+import { attachAuthorship, attachInk, pulseLine, reactionDecorations, overlaps, toneColor } from '../../lib/editorExtras';
+
+const PASTE_CHARS = 120; // pastes this big (or PASTE_LINES) are recorded
+const PASTE_LINES = 4;
 
 const OPTIONS = {
   lineHeight: 22,
@@ -88,13 +94,21 @@ export function EmptyState() {
 
 // `fileId`: the file to show. `primary`: the main editor (owns model cleanup and jump requests);
 // the split pane passes false.
-export default function CodeEditor({ fileId, readOnly = false, primary = true }) {
+export default function CodeEditor({ fileId, readOnly = false, primary = true, highlightPastes = false }) {
   // Just the name: the file object changes on every keystroke
   const fileName = useEditorStore((s) => s.files.find((f) => f.id === fileId)?.name);
   const status = useEditorStore((s) => s.fileStatus[fileId]);
   const connection = useEditorStore((s) => s.connection);
   const reveal = useEditorStore((s) => (s.reveal?.fileId === fileId ? s.reveal : null));
   const comments = useEditorStore((s) => s.comments);
+  const reactions = useEditorStore((s) => s.reactions);
+  const suggestions = useEditorStore((s) => s.suggestions);
+  const pastes = useEditorStore((s) => s.pastes);
+  const inkMode = useEditorStore((s) => s.inkMode);
+  const myId = useAuthStore((s) => s.user?.id);
+  const [overlap, setOverlap] = useState(null); // { name, users }
+  const lastTyped = useRef(0);
+  const ink = useRef(null);
   const visibleKey = useEditorStore((s) => [...s.openFiles.map((f) => f.id), s.rightPane?.fileId].join());
   const settings = useSettingsStore();
   const resolvedTheme = useThemeStore((s) => s.resolved);
@@ -157,6 +171,55 @@ export default function CodeEditor({ fileId, readOnly = false, primary = true })
         requestAction({ type: 'image', fileId: fileIdRef.current, text, language: model.getLanguageId() });
       },
     });
+    editor.addAction({
+      id: 'devsync.suggest',
+      label: 'Suggest a change',
+      contextMenuGroupId: 'devsync',
+      contextMenuOrder: 0,
+      run: () => {
+        const model = editor.getModel();
+        let sel = editor.getSelection();
+        // Nothing selected: the whole current line
+        if (sel.isEmpty()) sel = new monaco.Selection(sel.startLineNumber, 1, sel.startLineNumber, model.getLineMaxColumn(sel.startLineNumber));
+        requestAction({
+          type: 'suggest',
+          fileId: fileIdRef.current,
+          line: sel.startLineNumber,
+          start: model.getOffsetAt(sel.getStartPosition()),
+          end: model.getOffsetAt(sel.getEndPosition()),
+          original: model.getValueInRange(sel),
+        });
+      },
+    });
+    editor.addAction({
+      id: 'devsync.react',
+      label: 'React to this line',
+      contextMenuGroupId: 'devsync',
+      contextMenuOrder: 3,
+      run: () => {
+        const { model, sel } = selectionInfo();
+        const line = sel.startLineNumber;
+        requestAction({ type: 'react', fileId: fileIdRef.current, line, offset: model.getOffsetAt({ lineNumber: line, column: 1 }) });
+      },
+    });
+    editor.addAction({
+      id: 'devsync.ping',
+      label: 'Point everyone to this line',
+      contextMenuGroupId: 'devsync',
+      contextMenuOrder: 4,
+      run: () => requestAction({ type: 'ping', fileId: fileIdRef.current, line: editor.getPosition().lineNumber }),
+    });
+    // Large pastes are reported (interviews and classrooms show them)
+    editor.onDidPaste((e) => {
+      const model = editor.getModel();
+      const s = session();
+      if (!model || !s || editor.getOption(monaco.editor.EditorOption.readOnly)) return;
+      const start = model.getOffsetAt(e.range.getStartPosition());
+      const end = model.getOffsetAt(e.range.getEndPosition());
+      const lines = e.range.endLineNumber - e.range.startLineNumber + 1;
+      if (end - start >= PASTE_CHARS || lines >= PASTE_LINES) s.reportPaste(start, end, lines);
+    });
+    editor.onDidType(() => { lastTyped.current = Date.now(); });
     // Undo only your own edits, never a collaborator's
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyZ, () => session()?.undo.undo());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyZ, () => session()?.undo.redo());
@@ -166,8 +229,12 @@ export default function CodeEditor({ fileId, readOnly = false, primary = true })
     editor.onKeyDown(stopFollowing);
     editor.onMouseDown((e) => {
       stopFollowing();
-      if (e.target.type === monaco.editor.MouseTargetType.GUTTER_LINE_DECORATIONS && e.target.element?.classList.contains('comment-marker')) {
+      if (e.target.type === monaco.editor.MouseTargetType.GUTTER_LINE_DECORATIONS && /comment-marker|suggestion-marker/.test(e.target.element?.className || '')) {
         requestAction({ type: 'show-comments', fileId: fileIdRef.current, line: e.target.position?.lineNumber });
+      }
+      if (e.target.element?.classList.contains('reaction-chip') && e.target.position) {
+        const line = e.target.position.lineNumber;
+        requestAction({ type: 'react', fileId: fileIdRef.current, line, offset: editor.getModel().getOffsetAt({ lineNumber: line, column: 1 }) });
       }
     });
     // Web fonts can finish loading after Monaco measures them; re-measure so the cursor lines up
@@ -206,6 +273,126 @@ export default function CodeEditor({ fileId, readOnly = false, primary = true })
       stopCursors?.();
     };
   }, [mounted, fileId]);
+
+  // Who wrote each line
+  useEffect(() => {
+    if (!mounted || bound !== fileId || !settings.authorship) return;
+    const session = socketService.collab?.get(fileId);
+    if (!session) return;
+    const nameOf = (id) => {
+      const p = useWorkspaceStore.getState().members.find((m) => m.user_id === id)?.profiles;
+      return p?.display_name || p?.email || 'a former member';
+    };
+    return attachAuthorship(mounted.editor, mounted.monaco, session, nameOf);
+  }, [mounted, bound, fileId, settings.authorship]);
+
+  // Emoji reactions at the end of lines
+  useEffect(() => {
+    if (!mounted || bound !== fileId) return;
+    const { editor, monaco } = mounted;
+    const session = socketService.collab?.get(fileId);
+    const decorations = editor.createDecorationsCollection();
+    const rows = reactions.filter((r) => r.file_id === fileId);
+    const render = () => {
+      const model = editor.getModel();
+      if (!model) return;
+      const lineOf = (r) => {
+        const index = session?.resolveAnchor(r.anchor);
+        return index != null ? model.getPositionAt(index).lineNumber : r.line || 1;
+      };
+      decorations.set(reactionDecorations(monaco, model, rows, lineOf));
+    };
+    render();
+    const off = rows.length ? session?.on((type) => type === 'text' && render()) : null;
+    return () => {
+      off?.();
+      decorations.clear();
+    };
+  }, [mounted, bound, fileId, reactions]);
+
+  // Large pastes, outlined when asked for (always in interviews and classroom copies)
+  useEffect(() => {
+    if (!mounted || bound !== fileId || !(highlightPastes || settings.highlightPastes)) return;
+    const { editor, monaco } = mounted;
+    const session = socketService.collab?.get(fileId);
+    const decorations = editor.createDecorationsCollection();
+    const rows = pastes.filter((p) => p.file_id === fileId);
+    const render = () => {
+      const model = editor.getModel();
+      if (!model || !session) return;
+      decorations.set(rows.flatMap((p) => {
+        const start = session.resolveAnchor(p.anchor_start);
+        const end = session.resolveAnchor(p.anchor_end);
+        if (start == null || end == null || end <= start) return [];
+        const a = model.getPositionAt(start);
+        const b = model.getPositionAt(end);
+        const who = useWorkspaceStore.getState().members.find((m) => m.user_id === p.user_id)?.profiles?.display_name || 'Someone';
+        return [{
+          range: new monaco.Range(a.lineNumber, a.column, b.lineNumber, b.column),
+          options: { className: 'paste-range', hoverMessage: { value: `Pasted by ${who} · ${p.chars} characters · ${new Date(p.created_at).toLocaleTimeString()}` } },
+        }];
+      }));
+    };
+    render();
+    const off = rows.length ? session?.on((type) => type === 'text' && render()) : null;
+    return () => {
+      off?.();
+      decorations.clear();
+    };
+  }, [mounted, bound, fileId, pastes, highlightPastes, settings.highlightPastes]);
+
+  // Ink and pings from everyone (and yourself) for this file
+  useEffect(() => {
+    if (!mounted || !fileId) return;
+    const { editor, monaco } = mounted;
+    ink.current = attachInk(editor, monaco, {
+      myColor: toneColor(myId || ''),
+      send: (data) => socketService.collab?.signal('ink', { ...data, fileId }),
+    });
+    ink.current.setDrawing(useEditorStore.getState().inkMode); // drawing never edits, so viewers can draw too
+    const onSignal = ({ detail: { type, data, from } }) => {
+      if (data?.fileId !== fileId) return;
+      if (type === 'ink') ink.current?.receive(from.socketId, data);
+      if (type === 'ping') pulseLine(editor, monaco, data.line);
+    };
+    window.addEventListener('devsync:signal', onSignal);
+    return () => {
+      window.removeEventListener('devsync:signal', onSignal);
+      ink.current?.dispose();
+      ink.current = null;
+    };
+  }, [mounted, fileId, myId]);
+  useEffect(() => {
+    ink.current?.setDrawing(inkMode);
+  }, [inkMode, mounted, fileId]);
+
+  // "Maya is also editing greet()": checked as cursors move and every couple of seconds
+  useEffect(() => {
+    if (!mounted || bound !== fileId || !primary) return;
+    const { editor } = mounted;
+    const session = socketService.collab?.get(fileId);
+    if (!session) return;
+    let timer = 0;
+    const check = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const model = editor.getModel();
+        const pos = editor.getPosition();
+        const next = model && pos ? overlaps(model, session, pos.lineNumber, lastTyped.current) : null;
+        setOverlap((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+      }, 300);
+    };
+    const off = session.on((type) => type === 'cursors' && check());
+    const sub = editor.onDidChangeCursorPosition(check);
+    const interval = setInterval(check, 2000);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+      off();
+      sub.dispose();
+      setOverlap(null);
+    };
+  }, [mounted, bound, fileId, primary]);
 
   // Closed tabs: unlink and free their models (once, from the main editor)
   useEffect(() => {
@@ -256,7 +443,7 @@ export default function CodeEditor({ fileId, readOnly = false, primary = true })
         const line = index != null ? model.getPositionAt(index).lineNumber : Math.min(c.line || 1, model.getLineCount());
         byLine.set(line, [...(byLine.get(line) || []), c]);
       }
-      decorations.set([...byLine].map(([line, list]) => ({
+      const marks = [...byLine].map(([line, list]) => ({
         range: new monaco.Range(line, 1, line, 1),
         options: {
           isWholeLine: true,
@@ -265,7 +452,26 @@ export default function CodeEditor({ fileId, readOnly = false, primary = true })
           overviewRuler: { color: '#08872B99', position: monaco.editor.OverviewRulerLane.Left },
           stickiness: 1,
         },
-      })));
+      }));
+      // Open suggestions: a blue marker over the suggested range
+      for (const s of suggestions) {
+        if (s.file_id !== fileId || s.status !== 'open') continue;
+        const a = session.resolveAnchor(s.anchor_start);
+        const b = session.resolveAnchor(s.anchor_end);
+        const from = a != null ? model.getPositionAt(a) : { lineNumber: Math.min(s.line || 1, model.getLineCount()), column: 1 };
+        const to = b != null ? model.getPositionAt(b) : from;
+        marks.push({
+          range: new monaco.Range(from.lineNumber, from.column, to.lineNumber, to.column),
+          options: {
+            className: 'suggestion-range',
+            linesDecorationsClassName: 'suggestion-marker',
+            linesDecorationsTooltip: 'Suggested change: see the Comments panel',
+            overviewRuler: { color: '#0969DA99', position: monaco.editor.OverviewRulerLane.Left },
+            stickiness: 1,
+          },
+        });
+      }
+      decorations.set(marks);
     };
     render();
     const off = session?.on((type) => type === 'text' && render());
@@ -273,7 +479,7 @@ export default function CodeEditor({ fileId, readOnly = false, primary = true })
       off?.();
       decorations.clear();
     };
-  }, [mounted, bound, fileId, comments]);
+  }, [mounted, bound, fileId, comments, suggestions]);
 
   // Vim keys
   useEffect(() => {
@@ -326,6 +532,17 @@ export default function CodeEditor({ fileId, readOnly = false, primary = true })
           <div role="status" className="absolute inset-x-0 top-0 flex items-center gap-2 border-b border-line bg-canvas-subtle px-4 py-2 text-body-sm text-ink-muted">
             <LoadingSpinner size="sm" />
             {connection === 'offline' ? "Can't reach the server. Retrying…" : 'Connecting…'}
+          </div>
+        )}
+        {overlap && (
+          <div role="status" className="pointer-events-none absolute right-4 top-2 z-10 flex max-w-[70%] items-center gap-1.5 rounded-full border border-[#D29922]/40 bg-[#FFF8E5] px-3 py-1 text-label-sm text-[#7D4E00] shadow-overlay dark:bg-[#2B2111] dark:text-[#E3B341]">
+            <span aria-hidden="true">⚠</span>
+            <span className="truncate">{overlap.users.join(', ')} {overlap.users.length === 1 ? 'is' : 'are'} also editing <span className="font-mono">{overlap.name}()</span></span>
+          </div>
+        )}
+        {inkMode && primary && (
+          <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-line bg-canvas px-3 py-1 text-label-sm text-ink-muted shadow-overlay">
+            Drawing. Everyone sees it for a few seconds. Press Esc to stop.
           </div>
         )}
         {status === 'error' && (

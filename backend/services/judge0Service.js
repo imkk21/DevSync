@@ -67,6 +67,9 @@ export async function getSubmissionResult(token) {
   }
 }
 
+// Trailing spaces and blank lines at the end never decide a test
+export const normalizeOutput = (s) => (s || '').replace(/\r\n/g, '\n').split('\n').map((l) => l.trimEnd()).join('\n').trimEnd();
+
 // Decoded result: { stdout, stderr, compile_output, status, time, memory }
 export function decodeResult(result) {
   return {

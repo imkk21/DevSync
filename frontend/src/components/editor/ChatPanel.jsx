@@ -5,6 +5,38 @@ import useEditorStore from '../../store/editorStore';
 import { toast } from '../../store/toastStore';
 import Avatar from '../ui/Avatar';
 import MentionTextarea, { withMentions } from '../ui/MentionTextarea';
+import ToggleGroup from '../ui/ToggleGroup';
+import { socketService } from '../../services/socketService';
+
+// Live-stream viewers' chat (not stored): shown when someone watches through the public link
+function ViewerChat({ workspaceId }) {
+  const messages = useEditorStore((s) => s.viewerChat);
+  const [text, setText] = useState('');
+  const end = useRef(null);
+  useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [messages.length]); // braces: newer browsers return a promise here
+  const send = () => {
+    if (!text.trim()) return;
+    socketService.socket?.emit('spectate:chat', { workspaceId, text });
+    setText('');
+  };
+  return (
+    <>
+      <ol className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 text-body-sm" aria-live="polite">
+        {messages.length === 0 && <li className="text-ink-muted">Nobody has said anything yet. Messages here aren't saved.</li>}
+        {messages.map((m, i) => (
+          <li key={i}>
+            <span className={`font-medium ${m.host ? 'text-brand-fg' : 'text-ink'}`}>{m.name}</span>{' '}
+            <span className="whitespace-pre-wrap break-words text-ink-muted">{m.text}</span>
+          </li>
+        ))}
+        <li ref={end} />
+      </ol>
+      <div className="shrink-0 border-t border-line p-3">
+        <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} maxLength={500} placeholder="Reply to viewers" aria-label="Reply to viewers" className="input h-9" />
+      </div>
+    </>
+  );
+}
 
 const time = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 const day = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
@@ -13,6 +45,9 @@ const day = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: 'lon
 export default function ChatPanel({ workspaceId, userId, people }) {
   const messages = useEditorStore((s) => s.messages);
   const addMessage = useEditorStore((s) => s.addMessage);
+  const spectators = useEditorStore((s) => s.spectators);
+  const viewerCount = useEditorStore((s) => s.viewerChat.length);
+  const [room, setRoom] = useState('team');
   const [body, setBody] = useState('');
   const list = useRef(null);
   const names = people.map((p) => p.name);
@@ -38,9 +73,21 @@ export default function ChatPanel({ workspaceId, userId, people }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-10 shrink-0 items-center border-b border-line px-4">
+      <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-line pl-4 pr-2">
         <h2 className="text-label-md text-ink">Chat</h2>
+        {(spectators > 0 || viewerCount > 0) && (
+          <ToggleGroup
+            label="Chat with"
+            size="sm"
+            value={room}
+            onChange={setRoom}
+            className="!h-7"
+            options={[{ id: 'team', label: 'Team' }, { id: 'viewers', label: `Viewers · ${spectators}` }]}
+          />
+        )}
       </div>
+      {room === 'viewers' ? <ViewerChat workspaceId={workspaceId} /> : (
+      <>
       <ol ref={list} className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3" aria-live="polite">
         {messages.length === 0 && (
           <li className="px-2 py-8 text-center">
@@ -76,6 +123,8 @@ export default function ChatPanel({ workspaceId, userId, people }) {
       <div className="shrink-0 border-t border-line p-3">
         <MentionTextarea value={body} onChange={setBody} onSubmit={send} people={people} placeholder="Message (Enter to send)" label="Message" />
       </div>
+      </>
+      )}
     </div>
   );
 }

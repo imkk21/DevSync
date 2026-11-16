@@ -153,12 +153,29 @@ function MoreSharing({ workspace, reloadKey }) {
           })}
         />
         {workspace.public_token && (
-          <div className="mt-3 flex items-center gap-2 rounded-md border border-line px-3 py-2">
-            <span className="min-w-0 flex-1 truncate font-mono text-code-sm text-ink-muted">{origin}/p/{workspace.public_token}</span>
-            <button type="button" onClick={() => copy(`${origin}/p/${workspace.public_token}`, 'Public link')} className="icon-btn h-7 w-7" aria-label="Copy public link" title="Copy">
-              <GoCopy size={14} />
-            </button>
-          </div>
+          <>
+            <div className="mt-3 flex items-center gap-2 rounded-md border border-line px-3 py-2">
+              <span className="min-w-0 flex-1 truncate font-mono text-code-sm text-ink-muted">{origin}/p/{workspace.public_token}</span>
+              <button type="button" onClick={() => copy(`${origin}/p/${workspace.public_token}`, 'Public link')} className="icon-btn h-7 w-7" aria-label="Copy public link" title="Copy">
+                <GoCopy size={14} />
+              </button>
+            </div>
+            <p className="mt-2 text-body-sm text-ink-muted">
+              Viewers watch you code live, chat with you and can suggest changes. Put a live, runnable copy on any website:
+            </p>
+            <div className="mt-2 flex items-center gap-2 rounded-md border border-line px-3 py-2">
+              <span className="min-w-0 flex-1 truncate font-mono text-code-sm text-ink-muted">{`<iframe src="${origin}/embed/${workspace.public_token}" …>`}</span>
+              <button
+                type="button"
+                onClick={() => copy(`<iframe src="${origin}/embed/${workspace.public_token}" width="800" height="480" style="border:1px solid #E5E7EB;border-radius:8px"></iframe>`, 'Embed code')}
+                className="icon-btn h-7 w-7"
+                aria-label="Copy embed code"
+                title="Copy embed code"
+              >
+                <GoCopy size={14} />
+              </button>
+            </div>
+          </>
         )}
       </Section>
 

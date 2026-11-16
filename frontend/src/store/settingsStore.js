@@ -9,6 +9,8 @@ export const EDITOR_DEFAULTS = {
   lineNumbers: true,
   formatOnSave: false,
   vim: false,
+  authorship: false, // colour each line by who wrote it
+  highlightPastes: false, // always on in interviews and classroom copies
 };
 
 // Editor preferences, remembered in this browser

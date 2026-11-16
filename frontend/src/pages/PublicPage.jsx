@@ -1,26 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import Editor from '@monaco-editor/react';
 import { GoAlert, GoEye } from 'react-icons/go';
 import { API_URL } from '../lib/api';
-import { THEMES, defineDevSyncThemes } from '../lib/monacoTheme';
-import { languageForFile } from '../lib/languages';
-import useThemeStore from '../store/themeStore';
 import useAuthStore from '../store/authStore';
 import Logo from '../components/ui/Logo';
-import LangDot from '../components/ui/LangDot';
 import ThemeMenu from '../components/ui/ThemeMenu';
 import { PageLoader } from '../components/ui/LoadingSpinner';
+import LiveView from '../components/live/LiveView';
 
-// Read-only view of a workspace shared with a public link. No sign-in needed.
-export default function PublicPage() {
-  const { token } = useParams();
-  const theme = useThemeStore((s) => s.resolved);
-  const user = useAuthStore((s) => s.user);
+export function usePublicWorkspace(token) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
-  const [fileId, setFileId] = useState(null);
-
   useEffect(() => {
     fetch(`${API_URL}/api/public/${encodeURIComponent(token)}`)
       .then(async (res) => {
@@ -31,25 +21,27 @@ export default function PublicPage() {
       })
       .catch((err) => setError(err.message));
   }, [token]);
+  return { data, error };
+}
 
-  const files = useMemo(
-    () => (data?.files || []).filter((f) => !f.is_folder).sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true })),
-    [data],
+export function LinkError({ message }) {
+  return (
+    <div className="flex h-screen flex-col items-center justify-center bg-canvas px-6 text-center">
+      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-canvas-muted text-ink-muted"><GoAlert size={20} aria-hidden="true" /></span>
+      <h1 className="mt-4 text-headline-sm font-semibold text-ink">{message}</h1>
+      <Link to="/" className="btn btn-md btn-secondary mt-6">Go to DevSync</Link>
+    </div>
   );
-  useEffect(() => {
-    if (files.length && !fileId) setFileId((files.find((f) => /readme\.md$/i.test(f.name)) || files[0]).id);
-  }, [files, fileId]);
-  const file = files.find((f) => f.id === fileId);
+}
 
-  if (error) {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center bg-canvas px-6 text-center">
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-canvas-muted text-ink-muted"><GoAlert size={20} aria-hidden="true" /></span>
-        <h1 className="mt-4 text-headline-sm font-semibold text-ink">{error}</h1>
-        <Link to="/" className="btn btn-md btn-secondary mt-6">Go to DevSync</Link>
-      </div>
-    );
-  }
+// A workspace shared with a public link: watch it live (read-only), chat with the people coding,
+// suggest changes. No sign-in needed.
+export default function PublicPage() {
+  const { token } = useParams();
+  const user = useAuthStore((s) => s.user);
+  const { data, error } = usePublicWorkspace(token);
+
+  if (error) return <LinkError message={error} />;
   if (!data) return <PageLoader label="Opening shared workspace…" />;
 
   return (
@@ -64,38 +56,7 @@ export default function PublicPage() {
           <Link to={user ? '/dashboard' : '/login'} className="btn btn-sm btn-primary">{user ? 'Your workspaces' : 'Code with DevSync'}</Link>
         </div>
       </header>
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <nav aria-label="Files" className="max-h-40 shrink-0 overflow-y-auto border-b border-line bg-canvas-subtle p-2 md:max-h-none md:w-64 md:border-b-0 md:border-r">
-          <ul>
-            {files.map((f) => (
-              <li key={f.id}>
-                <button
-                  type="button"
-                  onClick={() => setFileId(f.id)}
-                  aria-current={f.id === fileId || undefined}
-                  className={`flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-body-sm ${f.id === fileId ? 'bg-brand-soft font-medium text-ink' : 'text-ink-muted hover:bg-canvas-muted hover:text-ink'}`}
-                >
-                  <LangDot language={f.language || languageForFile(f.name)} />
-                  <span className="truncate">{f.path.slice(1)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        <main className="min-h-0 min-w-0 flex-1">
-          {file && (
-            <Editor
-              height="100%"
-              path={`public/${file.id}`}
-              value={file.content || ''}
-              language={languageForFile(file.name)}
-              theme={THEMES[theme]}
-              beforeMount={defineDevSyncThemes}
-              options={{ readOnly: true, domReadOnly: true, minimap: { enabled: false }, scrollBeyondLastLine: false, fontSize: 14, lineHeight: 22, padding: { top: 12 }, automaticLayout: true }}
-            />
-          )}
-        </main>
-      </div>
+      <LiveView token={token} data={data} />
     </div>
   );
 }

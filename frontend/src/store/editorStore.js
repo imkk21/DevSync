@@ -37,12 +37,21 @@ const FRESH = {
   connection: 'connecting', // 'connecting' | 'online' | 'offline'
   presence: [], // online people: { id, display_name, email, avatar_url, fileId }
   driver: null, // pair mode: the user id who can type
+  rotation: null, // mob mode: { minutes, nextAt }
+  inkMode: false, // drawing over the code instead of editing
   following: null, // user id whose file and cursor we follow
   rightPane: null, // null | { type: 'split', fileId } | { type: 'preview' }
   zen: false,
   sidebarPanel: 'files', // files | search | comments | chat | activity
   reveal: null, // { fileId, offset?, length?, line? } for the editor to jump to
   comments: [],
+  reactions: [],
+  pastes: [],
+  suggestions: [],
+  watchResults: {}, // fileId -> latest automatic test run { results, passed, total, at, ... }
+  frozen: false, // classroom: the teacher paused editing
+  spectators: 0, // people watching through the public link
+  viewerChat: [], // live-stream chat with them: { name, text, host, at }
   messages: [],
   unreadChat: 0,
   runs: [],
@@ -59,7 +68,8 @@ const useEditorStore = create((set, get) => ({
   reset: () => set(FRESH),
   setConnection: (connection) => set({ connection }),
   setFileStatus: (fileId, status) => set({ fileStatus: { ...get().fileStatus, [fileId]: status } }),
-  setDriver: (driver) => set({ driver }),
+  setDriver: (driver, rotation = null) => set({ driver, rotation: driver ? rotation : null }),
+  toggleInk: (inkMode = !get().inkMode) => set({ inkMode }),
   setRightPane: (rightPane) => {
     // A split file whose tab was closed keeps its session only while it's on screen
     const old = get().rightPane?.fileId;
@@ -411,7 +421,7 @@ const useEditorStore = create((set, get) => ({
         method: 'POST',
         body: { ...get().runRequest(), tests: tests.map(({ id, input, expected_output }) => ({ id, input, expected_output })) },
       });
-      set({ testRun: { running: false, fileId: activeFile.id, results: Object.fromEntries(results.map((r) => [r.id, r])) } });
+      set({ testRun: { running: false, fileId: activeFile.id, at: Date.now(), results: Object.fromEntries(results.map((r) => [r.id, r])) } });
     } catch (error) {
       set({ testRun: { running: false, fileId: activeFile.id, results: {}, error: error.message } });
     }
@@ -425,6 +435,17 @@ const useEditorStore = create((set, get) => ({
   setComments: (comments) => set({ comments }),
   upsertComment: (row) => set({ comments: upsertById(get().comments, row) }),
   removeComment: (id) => set({ comments: get().comments.filter((c) => c.id !== id && c.parent_id !== id) }),
+  setSuggestions: (suggestions) => set({ suggestions }),
+  upsertSuggestion: (row) => set({ suggestions: upsertById(get().suggestions, row) }),
+  setFrozen: (frozen) => set({ frozen }),
+  setSpectators: (spectators) => set({ spectators }),
+  addViewerChat: (msg) => set({ viewerChat: [...get().viewerChat.slice(-199), msg] }),
+  setWatchResult: (payload) => set({ watchResults: { ...get().watchResults, [payload.fileId]: payload } }),
+  setReactions: (reactions) => set({ reactions }),
+  upsertReaction: (row) => set({ reactions: upsertById(get().reactions, row) }),
+  removeReaction: (id) => set({ reactions: get().reactions.filter((r) => r.id !== id) }),
+  setPastes: (pastes) => set({ pastes }),
+  addPaste: (row) => set({ pastes: upsertById(get().pastes, row) }),
   setMessages: (messages) => set({ messages }),
   addMessage: (row, fromSomeoneElse) => {
     if (get().messages.some((m) => m.id === row.id)) return;

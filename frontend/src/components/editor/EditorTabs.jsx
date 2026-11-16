@@ -1,15 +1,16 @@
-import { GoX } from 'react-icons/go';
-import { VscOpenPreview, VscSplitHorizontal } from 'react-icons/vsc';
+import { GoPencil, GoX } from 'react-icons/go';
+import { VscOpenPreview, VscSplitHorizontal, VscTypeHierarchySub } from 'react-icons/vsc';
 import useEditorStore from '../../store/editorStore';
 import useAuthStore from '../../store/authStore';
 import LangDot from '../ui/LangDot';
 import Avatar from '../ui/Avatar';
 import { MOD } from '../ui/Shortcut';
-import { previewKind } from './PreviewPane';
+import { previewKind, graphable } from './PreviewPane';
 
 export default function EditorTabs() {
-  const { openFiles, activeFileId, activeFile, openFile, closeFile, fileStatus, presence, rightPane, setRightPane } = useEditorStore();
+  const { openFiles, activeFileId, activeFile, openFile, closeFile, fileStatus, presence, rightPane, setRightPane, inkMode, toggleInk } = useEditorStore();
   const userId = useAuthStore((s) => s.user?.id);
+  const watchResults = useEditorStore((s) => s.watchResults);
 
   if (openFiles.length === 0) return null;
   const canPreview = !!previewKind(activeFile);
@@ -50,6 +51,15 @@ export default function EditorTabs() {
                   {viewers.slice(0, 2).map((u) => <Avatar key={u.id} name={u.display_name || u.email} id={u.id} src={u.avatar_url} size={14} ring />)}
                 </span>
               )}
+              {watchResults[file.id] && (
+                // Live test bar: the latest automatic run for this file
+                <span
+                  className={`rounded-full px-1.5 text-[11px] font-semibold tabular-nums leading-4 ${watchResults[file.id].passed === watchResults[file.id].total ? 'bg-brand-soft text-brand-fg' : 'bg-danger-soft text-danger'}`}
+                  title={`${watchResults[file.id].passed} of ${watchResults[file.id].total} tests pass`}
+                >
+                  {watchResults[file.id].passed}/{watchResults[file.id].total}
+                </span>
+              )}
               {unsaved && <span className="sr-only">(saving)</span>}
               <button
                 type="button"
@@ -73,6 +83,28 @@ export default function EditorTabs() {
         <div className="flex-1 border-b border-line" />
       </div>
       <div className="flex shrink-0 items-center gap-0.5 border-b border-l border-line px-1">
+        <button
+          type="button"
+          onClick={() => toggleInk()}
+          aria-pressed={inkMode}
+          className={`icon-btn h-7 w-7 ${inkMode ? 'bg-brand-soft text-brand-fg' : ''}`}
+          aria-label="Draw on the code"
+          title="Draw on the code for everyone (Esc to stop)"
+        >
+          <GoPencil size={14} />
+        </button>
+        {graphable(activeFile) && (
+          <button
+            type="button"
+            onClick={() => setRightPane(rightPane?.type === 'graph' ? null : { type: 'graph' })}
+            aria-pressed={rightPane?.type === 'graph'}
+            className={`icon-btn h-7 w-7 ${rightPane?.type === 'graph' ? 'bg-canvas-muted text-ink' : ''}`}
+            aria-label="Call graph"
+            title="Call graph: what calls what (click a box to jump to it)"
+          >
+            <VscTypeHierarchySub size={16} />
+          </button>
+        )}
         {canPreview && (
           <button
             type="button"

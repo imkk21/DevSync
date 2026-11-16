@@ -23,6 +23,7 @@ export class FileSession {
     this.fileId = fileId;
     this.attach();
     this.cursors = new Map(); // socketId -> { user, anchor, head } (Yjs relative positions as JSON)
+    this.authors = new Map(); // Yjs client id -> user id (who wrote which characters)
     this.synced = false;
     this.error = null;
     this.pending = 0; // updates sent but not yet acknowledged
@@ -115,6 +116,7 @@ export class FileSession {
     this.ackedVersion = res.version;
     this.savedVersion = res.savedVersion;
     this.cursors = new Map(res.cursors.map(({ socketId, ...c }) => [socketId, { ...c, at: 0 }]));
+    this.authors = new Map(Object.entries(res.authors || {}).map(([client, user]) => [Number(client), user]));
     this.synced = true;
     this.rebuilding = false;
     this.error = null;
@@ -165,6 +167,35 @@ export class FileSession {
       if (anchor != null && head != null) out.push({ socketId, user: c.user, anchor, head, at: c.at });
     }
     return out;
+  }
+
+  // Who wrote each line: the user with the most characters on it, or null. One entry per line.
+  lineAuthors() {
+    const out = [];
+    let counts = new Map();
+    const close = () => {
+      let best = null;
+      let most = 0;
+      for (const [user, n] of counts) if (n > most) [best, most] = [user, n];
+      out.push(best);
+      counts = new Map();
+    };
+    for (let item = this.text._start; item; item = item.right) {
+      if (item.deleted || typeof item.content?.str !== 'string') continue;
+      const user = this.authors.get(item.id.client) ?? null;
+      item.content.str.split('\n').forEach((part, i) => {
+        if (i > 0) close();
+        if (part.length && user) counts.set(user, (counts.get(user) || 0) + part.length);
+      });
+    }
+    close();
+    return out;
+  }
+
+  // A big paste, reported so interviews and classrooms can see it (start/end are text indexes)
+  reportPaste(start, end, lines) {
+    if (!this.synced || !this.client.socket.connected) return;
+    this.client.socket.emit('doc:paste', { fileId: this.fileId, chars: end - start, lines, anchorStart: this.anchorAt(start), anchorEnd: this.anchorAt(end) });
   }
 
   // Positions that move with the text (comment anchors): index <-> JSON
@@ -226,7 +257,13 @@ export class CollabClient {
     socket.on('presence_update', (users) => handlers.onPresence?.(users));
     socket.on('role_changed', ({ role }) => handlers.onRoleChanged?.(role));
     socket.on('workspace_removed', () => handlers.onRemoved?.());
-    socket.on('driver', ({ userId }) => handlers.onDriver?.(userId));
+    socket.on('driver', ({ userId, rotation }) => handlers.onDriver?.(userId, rotation));
+    socket.on('doc:authors', ({ fileId, authors }) => {
+      const s = this.sessions.get(fileId);
+      if (!s) return;
+      for (const [client, user] of Object.entries(authors)) s.authors.set(Number(client), user);
+      s.emit('authors');
+    });
     socket.onAny((event, payload) => handlers.onEvent?.(event, payload));
     socket.on('doc:update', ({ fileId, update }) => this.sessions.get(fileId)?.applyRemote(update));
     socket.on('doc:saved', ({ fileId, version }) => {
@@ -272,6 +309,16 @@ export class CollabClient {
   }
 
   // Pair mode: userId drives (null ends it). Resolves { ok } or { error }.
+  // Mob mode: you drive now, and the wheel passes on every `minutes`
+  rotate(minutes) {
+    return request(this.socket, 'driver:rotate', { workspaceId: this.workspaceId, minutes });
+  }
+
+  // Ping a line, draw over the code. Everyone else gets { type, data, from } as an 'signal' event.
+  signal(type, data) {
+    if (this.joined) this.socket.emit('signal', { workspaceId: this.workspaceId, type, data });
+  }
+
   setDriver(userId) {
     return request(this.socket, 'driver:set', { workspaceId: this.workspaceId, userId });
   }

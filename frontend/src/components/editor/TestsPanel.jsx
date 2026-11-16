@@ -5,6 +5,9 @@ import useEditorStore from '../../store/editorStore';
 import { getLanguage } from '../../lib/languages';
 import { toast } from '../../store/toastStore';
 import Button from '../ui/Button';
+import Switch from '../ui/Switch';
+import { api } from '../../lib/api';
+import useWorkspaceStore from '../../store/workspaceStore';
 
 function useTests(file) {
   const [tests, setTests] = useState(null);
@@ -32,7 +35,7 @@ function useTests(file) {
 
 function TestCase({ test, index, result, readOnly, onChange, onDelete }) {
   const [draft, setDraft] = useState(test);
-  useEffect(() => setDraft(test), [test.input, test.expected_output]);
+  useEffect(() => { setDraft(test); }, [test.input, test.expected_output]);
   const field = (key, label) => (
     <label className="min-w-0 flex-1">
       <span className="text-label-sm text-ink-muted">{label}</span>
@@ -81,6 +84,8 @@ function TestCase({ test, index, result, readOnly, onChange, onDelete }) {
 // Input/expected-output pairs for the active file, shared with the workspace
 export default function TestsPanel({ readOnly }) {
   const { activeFile, language, testRun, runTests, isRunning } = useEditorStore();
+  const watch = useEditorStore((s) => s.watchResults[s.activeFileId]);
+  const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const [tests, setTests] = useTests(activeFile);
   const runnable = !!getLanguage(language).judge0Id;
 
@@ -103,7 +108,18 @@ export default function TestsPanel({ readOnly }) {
     if (error) toast(`Couldn't delete the test: ${error.message}`, { tone: 'error' });
   };
 
-  const results = testRun?.fileId === activeFile.id ? testRun.results : {};
+  // The newest of your own run and the automatic run on save
+  const manual = testRun?.fileId === activeFile.id ? testRun : null;
+  const results = watch && (!manual || watch.at > (manual.at || 0))
+    ? Object.fromEntries(watch.results.map((r) => [r.id, r]))
+    : manual?.results || {};
+  const setWatch = async (on) => {
+    try {
+      useWorkspaceStore.getState().setCurrentWorkspace(await api(`/api/workspaces/${workspace.id}/watch-tests`, { method: 'POST', body: { on } }));
+    } catch (err) {
+      toast(err.message, { tone: 'error' });
+    }
+  };
   const ran = tests?.filter((t) => results[t.id]);
   const passed = ran?.filter((t) => results[t.id].passed).length;
 
@@ -124,6 +140,11 @@ export default function TestsPanel({ readOnly }) {
           </span>
         )}
         {testRun?.error && testRun.fileId === activeFile.id && <span className="text-label-md text-danger">{testRun.error}</span>}
+        {!readOnly && workspace && (
+          <div className="ml-auto w-64">
+            <Switch label="Run on every save" hint="For everyone. Shows whose edit broke a test." checked={!!workspace.watch_tests} onChange={setWatch} />
+          </div>
+        )}
       </div>
       {tests === null ? (
         <p className="mt-3 text-body-sm text-ink-muted">Loading tests…</p>

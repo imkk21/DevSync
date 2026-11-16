@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   GoAlert, GoArrowLeft, GoCheck, GoCloudOffline, GoComment, GoCommentDiscussion, GoCommandPalette, GoEye,
   GoFileDirectory, GoHistory, GoPersonAdd, GoPlay, GoPulse, GoScreenFull, GoSearch, GoSidebarCollapse,
-  GoSidebarExpand, GoX, GoBookmark, GoDownload, GoDuplicate, GoGear, GoVideo, GoStopwatch, GoPeople,
+  GoSidebarExpand, GoX, GoBookmark, GoDownload, GoDuplicate, GoGear, GoVideo, GoStopwatch, GoPeople, GoRepoForked, GoMortarBoard,
 } from 'react-icons/go';
 import useAuthStore from '../store/authStore';
 import useEditorStore from '../store/editorStore';
@@ -19,7 +19,7 @@ import SearchPanel from '../components/editor/SearchPanel';
 import CommentsPanel from '../components/editor/CommentsPanel';
 import ChatPanel from '../components/editor/ChatPanel';
 import ActivityPanel from '../components/editor/ActivityPanel';
-import PreviewPane, { previewKind } from '../components/editor/PreviewPane';
+import PreviewPane, { previewKind, graphable } from '../components/editor/PreviewPane';
 import CommandPalette from '../components/editor/CommandPalette';
 import SettingsModal from '../components/editor/SettingsModal';
 import ShortcutsModal from '../components/editor/ShortcutsModal';
@@ -29,6 +29,11 @@ import CodeImageModal from '../components/editor/CodeImageModal';
 import CheckpointModal from '../components/editor/CheckpointModal';
 import InterviewBar from '../components/editor/InterviewBar';
 import Tour, { tourDone } from '../components/editor/Tour';
+import ReactionPicker from '../components/editor/ReactionPicker';
+import SuggestModal from '../components/editor/SuggestModal';
+import ForkMergeModal from '../components/editor/ForkMergeModal';
+import ClassroomBar from '../components/editor/ClassroomBar';
+import { api } from '../lib/api';
 import InviteMemberModal from '../components/workspace/InviteMemberModal';
 import NotificationBell from '../components/layout/NotificationBell';
 import Avatar from '../components/ui/Avatar';
@@ -78,6 +83,17 @@ function Presence({ users, currentUserId, following, onFollow }) {
       <span className="hidden text-label-sm text-ink-muted xl:inline">{users.length} online</span>
     </div>
   );
+}
+
+// "next in 4:12" for mob mode
+function Countdown({ to }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const s = Math.max(0, Math.round((to - Date.now()) / 1000));
+  return <span className="font-mono tabular-nums">{Math.floor(s / 60)}:{String(s % 60).padStart(2, '0')}</span>;
 }
 
 // Autosave and connection state for the top bar
@@ -160,14 +176,18 @@ export default function EditorPage() {
   const {
     fetchFiles, activeFile, activeFileId, saveFile, language, isRunning, runCode, connection, reset, files,
     presence, driver, following, follow, rightPane, setRightPane, zen, toggleZen, sidebarPanel, setSidebarPanel,
-    unreadChat, downloadZip, openFiles,
+    unreadChat, downloadZip, openFiles, rotation, inkMode, toggleInk, frozen, spectators,
   } = useEditorStore();
+  const [raceTick, setRaceTick] = useState(0);
+  const authorship = useSettingsStore((s) => s.authorship);
   const activeStatus = useEditorStore((s) => s.fileStatus[s.activeFileId]);
   const { currentWorkspace, members, fetchWorkspace, inviteMember, updateWorkspace, duplicateWorkspace } = useWorkspaceStore();
   const [modal, setModal] = useState(null); // share | settings | shortcuts | history | replay | checkpoint | tour
   const [palette, setPalette] = useState(null); // files | commands | line
   const [imageRequest, setImageRequest] = useState(null);
   const [commentDraft, setCommentDraft] = useState(null);
+  const [reacting, setReacting] = useState(null); // { fileId, line, offset }
+  const [suggesting, setSuggesting] = useState(null); // { fileId, start, end, original, line }
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(() => !isSmallScreen());
   const sidebar = useResizable({ storageKey: 'devsync:sidebar-width', initial: 272, min: 200, max: 480 });
@@ -178,7 +198,7 @@ export default function EditorPage() {
   const isOwner = !!user && currentWorkspace?.owner_id === user.id;
   const canEdit = myRole === 'owner' || myRole === 'editor';
   const navigating = !!driver && driver !== user?.id; // pair mode, someone else drives
-  const readOnly = !canEdit || navigating;
+  const readOnly = !canEdit || navigating || (frozen && !isOwner);
   const runnable = !!getLanguage(language).judge0Id;
   const people = useMemo(
     () => members.map((m) => ({ id: m.user_id, name: m.profiles?.display_name || m.profiles?.email || 'Someone', avatar_url: m.profiles?.avatar_url })),
@@ -199,12 +219,18 @@ export default function EditorPage() {
       const store = useEditorStore.getState();
       await fetchWorkspace(workspaceId);
       await fetchFiles(workspaceId);
-      const [{ data: comments }, { data: messages }] = await Promise.all([
+      const [{ data: comments }, { data: messages }, { data: reactions }, { data: pastes }, { data: suggestions }] = await Promise.all([
         supabase.from('comments').select('*').eq('workspace_id', workspaceId).order('created_at'),
         supabase.from('messages').select('*').eq('workspace_id', workspaceId).order('created_at', { ascending: false }).limit(100),
+        supabase.from('reactions').select('*').eq('workspace_id', workspaceId),
+        supabase.from('paste_events').select('*').eq('workspace_id', workspaceId).order('created_at', { ascending: false }).limit(500),
+        supabase.from('suggestions').select('*').eq('workspace_id', workspaceId).order('created_at', { ascending: false }).limit(300),
       ]);
+      store.setSuggestions(suggestions || []);
       store.setComments(comments || []);
       store.setMessages((messages || []).reverse());
+      store.setReactions(reactions || []);
+      store.setPastes(pastes || []);
       setLoading(false);
     };
     init();
@@ -231,12 +257,17 @@ export default function EditorPage() {
     const store = useEditorStore.getState();
     socketService.connect(workspaceId, {
       onConnection: store.setConnection,
-      onJoin: (res) => !res.error && store.setDriver(res.driver ?? null),
+      onJoin: (res) => {
+        if (res.error) return;
+        store.setDriver(res.driver ?? null, res.rotation);
+        store.setFrozen(!!res.frozen);
+        store.setSpectators(res.spectators || 0);
+      },
       onPresence: store.setPresence,
       onFileStatus: store.setFileStatus,
       onText: store.setFileContent,
-      onDriver: (userId) => {
-        store.setDriver(userId);
+      onDriver: (userId, rotation) => {
+        store.setDriver(userId, rotation);
         if (userId && userId !== user.id) {
           const p = useWorkspaceStore.getState().members.find((m) => m.user_id === userId)?.profiles;
           toast(`${p?.display_name || p?.email || 'Someone'} is driving. You can watch and point.`);
@@ -258,6 +289,49 @@ export default function EditorPage() {
           }
         }
         if (event === 'workspace:updated') useWorkspaceStore.getState().setCurrentWorkspace(payload);
+        if (event === 'suggestion:decided') store.upsertSuggestion(payload);
+        if (event === 'spectators') store.setSpectators(payload.count);
+        if (event === 'spectate:chat') {
+          store.addViewerChat(payload);
+          if (!payload.host && useEditorStore.getState().sidebarPanel !== 'chat') toast(`Viewer ${payload.name}: ${payload.text}`, { action: { label: 'Reply', onClick: () => openPanel('chat') } });
+        }
+        if (event === 'classroom:frozen') {
+          store.setFrozen(payload.frozen);
+          toast(payload.frozen ? 'Your teacher paused editing for a moment' : 'You can type again', { tone: payload.frozen ? 'info' : 'success' });
+        }
+        if (event === 'classroom:hint') {
+          toast(`Your teacher added ${payload.path.slice(1)}`, {
+            tone: 'success',
+            action: { label: 'Open', onClick: () => { const f = useEditorStore.getState().files.find((x) => x.path === payload.path); if (f) useEditorStore.getState().openFile(f); } },
+          });
+        }
+        if (event === 'race') {
+          setRaceTick((n) => n + 1);
+          if (payload.endsAt) toast('The race has started. Make the tests pass!', { tone: 'success' });
+        }
+        if (event === 'tests:watch') {
+          store.setWatchResult(payload);
+          const file = useEditorStore.getState().files.find((f) => f.id === payload.fileId);
+          const who = (id) => {
+            if (id === user.id) return 'Your';
+            const p = useWorkspaceStore.getState().members.find((m) => m.user_id === id)?.profiles;
+            return `${p?.display_name || p?.email || 'Someone'}'s`;
+          };
+          if (payload.broken.length) {
+            toast(`${who(payload.brokenBy)} last edit broke ${payload.broken.length} ${payload.broken.length === 1 ? 'test' : 'tests'} in ${file?.name || 'a file'}`, { tone: 'error' });
+          } else if (payload.fixed) {
+            toast(`All tests pass again in ${file?.name || 'a file'}`, { tone: 'success' });
+          }
+        }
+        if (event === 'signal') {
+          window.dispatchEvent(new CustomEvent('devsync:signal', { detail: payload }));
+          // A ping on a file you're not looking at: offer to go there
+          const { type, data, from } = payload;
+          if (type === 'ping' && data.fileId !== useEditorStore.getState().activeFileId) {
+            const file = useEditorStore.getState().files.find((f) => f.id === data.fileId);
+            if (file) toast(`${from.display_name || 'Someone'} is pointing at line ${data.line} of ${file.name}`, { action: { label: 'Go', onClick: () => useEditorStore.getState().revealAt(file.id, { line: data.line }) } });
+          }
+        }
       },
       onRoleChanged: () => fetchWorkspace(workspaceId),
       onRemoved: () => navigate('/dashboard', { replace: true, state: { notice: 'You no longer have access to that workspace.' } }),
@@ -279,6 +353,11 @@ export default function EditorPage() {
       .on('postgres_changes', { event: 'UPDATE', ...scope('comments') }, ({ new: row }) => store().upsertComment(row))
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'comments' }, ({ old }) => store().removeComment(old.id))
       .on('postgres_changes', { event: 'INSERT', ...scope('messages') }, ({ new: row }) => store().addMessage(row, row.user_id !== useAuthStore.getState().user?.id))
+      .on('postgres_changes', { event: 'INSERT', ...scope('suggestions') }, ({ new: row }) => store().upsertSuggestion(row))
+      .on('postgres_changes', { event: 'UPDATE', ...scope('suggestions') }, ({ new: row }) => store().upsertSuggestion(row))
+      .on('postgres_changes', { event: 'INSERT', ...scope('reactions') }, ({ new: row }) => store().upsertReaction(row))
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'reactions' }, ({ old }) => store().removeReaction(old.id))
+      .on('postgres_changes', { event: 'INSERT', ...scope('paste_events') }, ({ new: row }) => store().addPaste(row))
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [workspaceId]);
@@ -304,6 +383,13 @@ export default function EditorPage() {
       } else if (detail.type === 'show-comments') {
         setSidebarOpen(true);
         setSidebarPanel('comments');
+      } else if (detail.type === 'suggest') {
+        setSuggesting(detail);
+      } else if (detail.type === 'react') {
+        setReacting(detail);
+      } else if (detail.type === 'ping') {
+        socketService.collab?.signal('ping', { fileId: detail.fileId, line: detail.line });
+        window.dispatchEvent(new CustomEvent('devsync:signal', { detail: { type: 'ping', data: detail, from: { id: user.id } } }));
       } else if (detail.type === 'image') {
         const file = useEditorStore.getState().files.find((f) => f.id === detail.fileId);
         setImageRequest({ text: detail.text, language: detail.language, fileName: file?.name });
@@ -322,6 +408,10 @@ export default function EditorPage() {
     setSidebarOpen(true);
     setSidebarPanel(id);
   };
+  const startMob = async (minutes) => {
+    const res = await socketService.collab?.rotate(minutes);
+    if (res?.error) toast(res.error, { tone: 'error' });
+  };
   const setPair = async (userId) => {
     const res = await socketService.collab?.setDriver(userId);
     if (res?.error) toast(res.error, { tone: 'error' });
@@ -329,6 +419,15 @@ export default function EditorPage() {
   const setInterview = async (on) => {
     const { error } = await updateWorkspace(workspaceId, { interview: on });
     if (error) toast(error.message, { tone: 'error' });
+  };
+  const fork = async () => {
+    try {
+      const copy = await api(`/api/workspaces/${workspaceId}/fork`, { method: 'POST' });
+      toast('Fork created. Try your idea, then use Review and merge.', { tone: 'success' });
+      navigate(`/editor/${copy.id}`);
+    } catch (err) {
+      toast(err.message, { tone: 'error' });
+    }
   };
   const duplicate = async () => {
     const { data, error } = await duplicateWorkspace(workspaceId);
@@ -362,12 +461,23 @@ export default function EditorPage() {
       { id: 'checkpoint', label: 'Save a checkpoint…', hidden: !canEdit, run: () => setModal('checkpoint') },
       { id: 'zip', label: 'Download workspace as zip', run: () => downloadZip(currentWorkspace?.name || 'workspace') },
       { id: 'duplicate', label: 'Duplicate workspace', run: duplicate },
+      { id: 'fork', label: 'Fork to try an idea', run: fork },
+      { id: 'merge', label: 'Review and merge this fork', hidden: !currentWorkspace?.fork_of, run: () => setModal('merge') },
+      { id: 'suggest', label: 'Suggest a change here', hidden: !activeFile, run: () => runEditorAction('devsync.suggest') },
       { id: 'share', label: 'Share…', hidden: !isOwner, run: () => setModal('share') },
       { id: 'pair-start', label: 'Start pair mode (you drive)', hidden: !canEdit || !!driver, run: () => setPair(user.id) },
       { id: 'pair-take', label: 'Take the wheel', hidden: !canEdit || !driver || driver === user?.id, run: () => setPair(user.id) },
-      { id: 'pair-end', label: 'End pair mode', hidden: !driver || (driver !== user?.id && !isOwner), run: () => setPair(null) },
+      { id: 'pair-end', label: rotation ? 'End mob mode' : 'End pair mode', hidden: !driver || (driver !== user?.id && !isOwner), run: () => setPair(null) },
+      ...[5, 10, 15].map((m) => ({ id: `mob-${m}`, label: `Mob mode: pass the keyboard every ${m} minutes`, hidden: !canEdit, run: () => startMob(m) })),
+      { id: 'ink', label: inkMode ? 'Stop drawing' : 'Draw on the code', hidden: !activeFile, run: () => toggleInk() },
+      { id: 'ping', label: 'Point everyone to this line', hidden: !activeFile, run: () => runEditorAction('devsync.ping') },
+      { id: 'react', label: 'React to this line', hidden: !activeFile, run: () => runEditorAction('devsync.react') },
+      { id: 'authorship', label: authorship ? 'Hide who wrote what' : 'Show who wrote what', run: () => useSettingsStore.getState().update({ authorship: !authorship }) },
+      { id: 'pastes', label: 'Highlight pasted code', run: () => useSettingsStore.getState().update({ highlightPastes: !useSettingsStore.getState().highlightPastes }) },
       ...others.map((u) => ({ id: `follow-${u.id}`, label: following === u.id ? `Stop following ${u.display_name}` : `Follow ${u.display_name || u.email}`, run: () => follow(following === u.id ? null : u.id) })),
       ...(isOwner && driver ? others.map((u) => ({ id: `drive-${u.id}`, label: `Hand the wheel to ${u.display_name || u.email}`, run: () => setPair(u.id) })) : []),
+      { id: 'wall', label: 'Class wall: see every student', hidden: !(isOwner && currentWorkspace?.is_classroom), run: () => navigate(`/editor/${workspaceId}/wall`) },
+      { id: 'graph', label: 'Show the call graph', hidden: !activeFile, run: () => setRightPane({ type: 'graph' }) },
       { id: 'interview', label: currentWorkspace?.interview_started_at ? 'End interview' : 'Start interview mode', hidden: !isOwner, run: () => setInterview(!currentWorkspace?.interview_started_at) },
       { id: 'settings', label: 'Editor settings', shortcut: [MOD, ','], run: () => setModal('settings') },
       { id: 'vim', label: vim ? 'Turn off Vim keys' : 'Turn on Vim keys', run: () => useSettingsStore.getState().update({ vim: !vim }) },
@@ -378,7 +488,7 @@ export default function EditorPage() {
       { id: 'shortcuts', label: 'Keyboard shortcuts', shortcut: ['?'], run: () => setModal('shortcuts') },
       { id: 'tour', label: 'Show the tour again', run: () => setModal('tour') },
     ];
-  }, [activeFile, activeFileId, readOnly, runnable, rightPane, zen, sidebarOpen, canEdit, isOwner, driver, presence, following, user?.id, currentWorkspace, modal]);
+  }, [activeFile, activeFileId, readOnly, runnable, rightPane, zen, sidebarOpen, canEdit, isOwner, driver, rotation, presence, following, user?.id, currentWorkspace, modal, inkMode, authorship]);
 
   // Keyboard shortcuts that work everywhere, including inside the editor
   useEffect(() => {
@@ -393,6 +503,7 @@ export default function EditorPage() {
       else if (mod && key === '\\') action = () => activeFileId && setRightPane(useEditorStore.getState().rightPane?.type === 'split' ? null : { type: 'split', fileId: activeFileId });
       else if (mod && key === ',') action = () => setModal('settings');
       else if (e.key === '?' && !mod && !isTyping(e.target)) action = () => setModal('shortcuts');
+      else if (e.key === 'Escape' && useEditorStore.getState().inkMode) action = () => toggleInk(false);
       if (!action) return;
       e.preventDefault();
       e.stopPropagation();
@@ -408,6 +519,7 @@ export default function EditorPage() {
   const filePath = activeFile?.path?.replace(/^\//, '') || activeFile?.name;
   const splitFileId = rightPane?.type === 'split' && openFiles.some((f) => f.id === rightPane.fileId) ? rightPane.fileId : null;
   const showPreview = rightPane?.type === 'preview' && previewKind(activeFile);
+  const showGraph = rightPane?.type === 'graph' && graphable(activeFile);
   const followed = following && presence.find((u) => u.id === following);
 
   const moreItems = [
@@ -416,6 +528,7 @@ export default function EditorPage() {
     { label: 'Save a checkpoint…', icon: GoBookmark, hidden: !canEdit, onSelect: () => setModal('checkpoint') },
     'divider',
     { label: 'Start pair mode', icon: GoPeople, hidden: !canEdit || !!driver, onSelect: () => setPair(user.id) },
+    { label: 'Mob mode (10 min turns)', icon: GoPeople, hidden: !canEdit || !!driver, onSelect: () => startMob(10) },
     { label: 'Take the wheel', icon: GoPeople, hidden: !canEdit || !driver || driver === user.id, onSelect: () => setPair(user.id) },
     { label: 'End pair mode', icon: GoPeople, hidden: !driver || (driver !== user.id && !isOwner), onSelect: () => setPair(null) },
     { label: currentWorkspace.interview_started_at ? 'End interview' : 'Interview mode', icon: GoStopwatch, hidden: !isOwner, onSelect: () => setInterview(!currentWorkspace.interview_started_at) },
@@ -423,6 +536,7 @@ export default function EditorPage() {
     'divider',
     { label: 'Download as zip', icon: GoDownload, onSelect: () => downloadZip(currentWorkspace.name) },
     { label: 'Duplicate workspace', icon: GoDuplicate, onSelect: duplicate },
+    { label: 'Fork to try an idea', icon: GoRepoForked, onSelect: fork },
     { label: 'Editor settings', icon: GoGear, onSelect: () => setModal('settings') },
   ];
 
@@ -456,14 +570,23 @@ export default function EditorPage() {
             )}
           </nav>
           {!canEdit && (
-            <span className="badge ml-1 shrink-0">
+            <span className="badge ml-1 shrink-0" title="You can't edit here, but you can suggest changes: select code, right-click, Suggest a change">
               <GoEye size={12} aria-hidden="true" /> View only
             </span>
           )}
           {driver && (
             <span className="badge ml-1 hidden shrink-0 border-brand/25 bg-brand-soft text-brand-fg sm:inline-flex" title="Pair mode: one person types, everyone watches">
               <GoPeople size={12} aria-hidden="true" /> {driver === user.id ? "You're driving" : `${nameOf(driver)} is driving`}
+              {rotation && <span className="text-brand-fg/80">· next in <Countdown to={rotation.nextAt} /></span>}
             </span>
+          )}
+          {spectators > 0 && (
+            <span className="badge ml-1 hidden shrink-0 sm:inline-flex" title="People watching through the public link">
+              <GoEye size={12} aria-hidden="true" /> {spectators} watching
+            </span>
+          )}
+          {frozen && !isOwner && (
+            <span className="badge ml-1 shrink-0 border-[#D29922]/40 bg-[#FFF8E5] text-[#7D4E00] dark:bg-[#2B2111] dark:text-[#E3B341]">Paused by your teacher</span>
           )}
           {currentWorkspace.interview_started_at && (
             <InterviewBar workspaceId={workspaceId} startedAt={currentWorkspace.interview_started_at} isOwner={isOwner} onEnd={() => setInterview(false)} />
@@ -483,6 +606,12 @@ export default function EditorPage() {
             >
               <GoCommandPalette size={16} />
             </button>
+            {currentWorkspace.classroom_id && <ClassroomBar workspace={currentWorkspace} refresh={raceTick} />}
+            {isOwner && currentWorkspace.is_classroom && (
+              <Link to={`/editor/${workspaceId}/wall`} className="btn btn-sm btn-secondary hidden md:inline-flex" title="See every student's copy live">
+                <GoMortarBoard size={14} /> Class wall
+              </Link>
+            )}
             <NotificationBell className="hidden sm:block" />
             <ThemeMenu className="hidden md:block" />
             <DropdownMenu label="More" items={moreItems} />
@@ -546,7 +675,7 @@ export default function EditorPage() {
               <div role="tabpanel" className="min-h-0 flex-1">
                 {sidebarPanel === 'files' && <FileTree workspaceId={workspaceId} workspaceName={currentWorkspace.name} userId={user?.id} readOnly={readOnly} />}
                 {sidebarPanel === 'search' && <SearchPanel readOnly={readOnly} />}
-                {sidebarPanel === 'comments' && <CommentsPanel userId={user?.id} people={people} draft={commentDraft} onDraftDone={() => setCommentDraft(null)} />}
+                {sidebarPanel === 'comments' && <CommentsPanel userId={user?.id} people={people} draft={commentDraft} onDraftDone={() => setCommentDraft(null)} canEdit={canEdit} />}
                 {sidebarPanel === 'chat' && <ChatPanel workspaceId={workspaceId} userId={user?.id} people={people} />}
                 {sidebarPanel === 'activity' && <ActivityPanel workspaceId={workspaceId} people={people} />}
               </div>
@@ -556,6 +685,13 @@ export default function EditorPage() {
         )}
 
         <main className="flex min-w-0 flex-1 flex-col">
+          {!zen && currentWorkspace.fork_of && (
+            <div className="flex h-9 shrink-0 items-center gap-2 border-b border-line bg-canvas-subtle px-3 text-body-sm text-ink-muted">
+              <GoRepoForked size={14} aria-hidden="true" />
+              <span className="truncate">This is a fork. Try ideas here, then bring them back.</span>
+              <Button size="sm" variant="secondary" className="ml-auto !h-7" onClick={() => setModal('merge')}>Review and merge</Button>
+            </div>
+          )}
           {!zen && <EditorTabs />}
           {followed && (
             <div role="status" className="flex h-8 shrink-0 items-center gap-2 border-b border-brand/25 bg-brand-soft px-3 text-label-md text-brand-fg">
@@ -566,12 +702,16 @@ export default function EditorPage() {
           )}
           <div className="flex min-h-0 flex-1">
             <div className="min-w-0 flex-1">
-              {activeFileId ? <CodeEditor fileId={activeFileId} readOnly={readOnly} /> : <EmptyState />}
+              {activeFileId ? (
+                <CodeEditor fileId={activeFileId} readOnly={readOnly} highlightPastes={!!(currentWorkspace.interview_started_at || currentWorkspace.classroom_id)} />
+              ) : <EmptyState />}
             </div>
-            {(splitFileId || showPreview) && (
+            {(splitFileId || showPreview || showGraph) && (
               <div className="relative hidden shrink-0 border-l border-line md:block" style={{ width: split.size, maxWidth: '60%' }}>
                 <div {...split.handleProps} aria-label="Resize split" className="resize-handle-x !-left-[3px] !right-auto" />
-                {showPreview ? (
+                {showGraph ? (
+                  <PreviewPane key={`graph-${activeFile.id}`} file={activeFile} graph onClose={() => setRightPane(null)} />
+                ) : showPreview ? (
                   <PreviewPane file={activeFile} onClose={() => setRightPane(null)} />
                 ) : (
                   <SplitPane fileId={splitFileId} readOnly={readOnly} onClose={() => setRightPane(null)} />
@@ -607,8 +747,11 @@ export default function EditorPage() {
       <ShortcutsModal isOpen={modal === 'shortcuts'} onClose={() => setModal(null)} />
       <CheckpointModal isOpen={modal === 'checkpoint'} onClose={() => setModal(null)} workspaceId={workspaceId} />
       {activeFile && <HistoryModal isOpen={modal === 'history'} onClose={() => setModal(null)} file={activeFile} people={people} readOnly={readOnly} />}
-      {activeFile && <ReplayModal isOpen={modal === 'replay'} onClose={() => setModal(null)} file={activeFile} people={people} />}
+      {activeFile && <ReplayModal isOpen={modal === 'replay'} onClose={() => setModal(null)} file={activeFile} people={people} publicToken={currentWorkspace.public_token} />}
       <CodeImageModal request={imageRequest} onClose={() => setImageRequest(null)} />
+      <ReactionPicker request={reacting} userId={user?.id} workspaceId={workspaceId} onClose={() => setReacting(null)} />
+      <SuggestModal request={suggesting} userId={user?.id} workspaceId={workspaceId} onClose={() => setSuggesting(null)} />
+      {currentWorkspace.fork_of && <ForkMergeModal isOpen={modal === 'merge'} onClose={() => setModal(null)} workspaceId={workspaceId} />}
       {palette && <CommandPalette mode={palette} onClose={() => setPalette(null)} commands={commands} />}
       {modal === 'tour' && <Tour onDone={() => setModal(null)} />}
     </div>

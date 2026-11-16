@@ -6,6 +6,7 @@ import workspaceRoutes from './routes/workspaces.js';
 import compilerRoutes from './routes/compiler.js';
 import miscRoutes from './routes/misc.js';
 import { initCollab } from './collab.js';
+import './services/testWatch.js'; // reruns tests on save in workspaces that watch them
 
 import { createServer } from 'http';
 import { Server } from 'socket.io';

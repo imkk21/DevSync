@@ -98,3 +98,98 @@ export function buildHtmlPreview(htmlPath, html, contentAt) {
     });
   return /<head[^>]*>/i.test(out) ? out.replace(/<head[^>]*>/i, (h) => `${h}${CONSOLE_BRIDGE}`) : CONSOLE_BRIDGE + out;
 }
+
+// ---------- Which function a line is in (overlap warning, call graph) ----------
+const KEYWORDS = new Set(['if', 'for', 'while', 'switch', 'catch', 'return', 'else', 'new', 'do', 'try', 'with', 'elif', 'except', 'match', 'when', 'foreach']);
+const DEFINITIONS = [
+  /^\s*(?:async\s+)?def\s+(\w+)/, // Python
+  /^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+(\w+)/,
+  /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*(\w+)/, // JS/TS
+  /^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|\w+)\s*=>/, // arrow functions
+  /^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+(\w+)/, // Rust
+  /^\s*func\s+(?:\([^)]*\)\s*)?(\w+)/, // Go
+  /^\s*(?:(?:public|private|protected|static|final|override|virtual|async|inline|const)\s+)*[\w:<>[\],*&]+\s+\**(\w+)\s*\([^;]*\)\s*(?:const\s*)?\{?\s*$/, // Java, C, C++, C#
+  /^\s*(?:(?:public|private|protected|static|async|get|set)\s+)*(\w+)\s*\([^;]*\)\s*\{\s*$/, // JS/TS methods
+  /^\s*def\s+(?:self\.)?(\w+[?!]?)/, // Ruby
+];
+
+function definitionName(line) {
+  for (const re of DEFINITIONS) {
+    const name = re.exec(line)?.[1];
+    if (name && !KEYWORDS.has(name)) return name;
+  }
+  return null;
+}
+
+// The innermost function or class around `index` (0-based line): { name, line } or null.
+// ponytail: indentation-based heuristic; swap in a real parser (tree-sitter) if it misjudges often.
+export function enclosingBlock(lines, index) {
+  let limit = Infinity;
+  for (let i = Math.min(index, lines.length - 1); i >= 0; i--) {
+    const text = lines[i];
+    if (!text.trim()) continue;
+    const indent = text.match(/^\s*/)[0].length;
+    if (i !== index && indent >= limit) continue;
+    const name = definitionName(text);
+    if (name) return { name, line: i };
+    limit = indent;
+    if (indent === 0 && i !== index) return null;
+  }
+  return null;
+}
+
+// Every definition in the text: [{ name, line }]
+export function definitions(lines) {
+  const out = [];
+  lines.forEach((text, line) => {
+    const name = definitionName(text);
+    if (name) out.push({ name, line });
+  });
+  return out;
+}
+
+// ---------- Call graph ----------
+const indentOf = (line) => line.match(/^\s*/)[0].length;
+const escapeLabel = (s) => s.replace(/["\\]/g, "'");
+
+// A Mermaid flowchart of which functions in `text` call which, including functions defined in
+// other files (`elsewhere`: [{ name, fileId, file, line }]). Returns { code, targets } where
+// targets maps node ids to { fileId, line } so clicking a node can jump to the definition.
+// ponytail: name matching, not real resolution; same-named functions in two files pick the local one.
+export function callGraph(fileId, text, elsewhere = [], maxNodes = 60) {
+  const lines = text.split('\n');
+  const local = definitions(lines);
+  const known = new Map(elsewhere.filter((d) => d.fileId !== fileId).map((d) => [d.name, d]));
+  for (const d of local) known.set(d.name, { ...d, fileId, local: true });
+
+  const ids = new Map(); // name -> node id
+  const targets = {};
+  const nodes = [];
+  const node = (name) => {
+    if (!ids.has(name)) {
+      const d = known.get(name);
+      const id = `${d.local ? 'n' : 'x'}${ids.size}`;
+      ids.set(name, id);
+      targets[id] = { fileId: d.fileId, line: d.line + 1 };
+      nodes.push(d.local ? `  ${id}["${escapeLabel(name)}()"]` : `  ${id}["${escapeLabel(name)}() · ${escapeLabel(d.file || '')}"]:::ext`);
+    }
+    return ids.get(name);
+  };
+
+  const edges = new Set();
+  local.forEach((d, i) => {
+    const indent = indentOf(lines[d.line]);
+    let end = lines.length;
+    for (const next of local.slice(i + 1)) {
+      if (indentOf(lines[next.line]) <= indent) { end = next.line; break; }
+    }
+    const body = lines.slice(d.line + 1, end).join('\n');
+    node(d.name);
+    for (const name of known.keys()) {
+      if (name === d.name || ids.size >= maxNodes) continue;
+      if (new RegExp(`(^|[^\\w.])${name.replace(/[$]/g, '\\$&')}\\s*\\(`).test(body)) edges.add(`  ${node(d.name)} --> ${node(name)}`);
+    }
+  });
+  const code = ['flowchart LR', ...nodes, ...edges, '  classDef ext stroke-dasharray: 4 3'].join('\n');
+  return { code, targets, empty: local.length === 0 };
+}

@@ -57,7 +57,7 @@ export default function CommandPalette({ mode, onClose, commands }) {
     return ranked.filter((x) => x.s !== null).sort((a, b) => a.s - b.s || a.label.localeCompare(b.label)).slice(0, 60);
   }, [kind, q, commands, files, activeFileId]);
 
-  useEffect(() => setIndex(0), [kind, q]);
+  useEffect(() => { setIndex(0); }, [kind, q]);
   useEffect(() => {
     listRef.current?.querySelector(`[data-index="${index}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [index]);

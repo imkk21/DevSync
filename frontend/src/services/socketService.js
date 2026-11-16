@@ -9,15 +9,18 @@ class SocketService {
   socket = null;
   collab = null;
 
-  connect(workspaceId, handlers) {
+  // spectator: { token, name } joins read-only through a public link, without an account
+  connect(workspaceId, handlers, spectator = null) {
     this.disconnect();
     this.socket = io(SOCKET_URL, {
       transports: ['websocket'],
       withCredentials: true,
       // Called on every (re)connect, so a refreshed token is always used
-      auth: (cb) => {
-        supabase.auth.getSession().then(({ data }) => cb({ token: data.session?.access_token }));
-      },
+      auth: spectator
+        ? { spectate: spectator.token, name: spectator.name }
+        : (cb) => {
+          supabase.auth.getSession().then(({ data }) => cb({ token: data.session?.access_token }));
+        },
     });
     this.collab = new CollabClient(this.socket, workspaceId, handlers);
     return this.collab;

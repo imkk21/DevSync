@@ -85,7 +85,7 @@ SENTRY_DSN=                # error reporting
 
 ### Database
 
-Run every file in `supabase/migrations/` in the Supabase SQL Editor, in order (001 to 006).
+Run every file in `supabase/migrations/` in the Supabase SQL Editor, in order (001 to 007).
 
 ### 4. Run Locally
 
@@ -129,6 +129,11 @@ CI (`.github/workflows/ci.yml`) runs both plus the production build on every pus
 - 🔗 **Sharing** — Invite links, email invites for new users, public read-only links, templates, duplicate, pin, archive
 - 💬 **Together** — Code comments, chat, @mentions, notifications, follow mode, pair (driver/navigator) mode
 - 🎓 **Creative** — Interview mode, classroom copies, daily challenge, code-to-image
+- 🖍️ **Live extras** — Who-wrote-what gutter, ping a line, draw over code, line reactions, "also editing this function" warning, paste detection, mob rotation
+- 🔀 **Review** — Suggestion mode (anyone proposes, editors accept), live forks with 3-way merge, tests that rerun on every save and name whose edit broke them
+- 🏫 **Classroom** — Teacher wall of every student's copy, pause everyone, push hints, raised hands, timed races with a leaderboard
+- 📺 **Sharing live** — Spectator links with viewer chat and guest suggestions, embeddable code movies, live runnable embeds
+- 🗺️ **Diagrams** — Mermaid files and blocks, clickable call graph that jumps to the code
 
 ## Supported Languages
 

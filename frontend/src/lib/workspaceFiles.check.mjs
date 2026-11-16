@@ -1,7 +1,7 @@
 // Run: npm run check (in frontend/)
 import assert from 'node:assert/strict';
 import { unzipSync, strFromU8 } from 'fflate';
-import { findMatches, replacementFor, resolvePath, zipFiles, toBase64, buildHtmlPreview, looksBinary } from './workspaceFiles.js';
+import { findMatches, replacementFor, resolvePath, zipFiles, toBase64, buildHtmlPreview, looksBinary, enclosingBlock, definitions, callGraph } from './workspaceFiles.js';
 import { CHALLENGES, todaysChallenge } from './templates.js';
 
 // Search
@@ -44,6 +44,38 @@ assert.match(html, /console\.log\("<\\\/script>"\)/);
 assert.match(html, /<script src="https:\/\/x.dev\/a.js"><\/script>/);
 assert.match(html, /<head><script>\(function\(\)\{/, 'console bridge goes first in <head>');
 console.log('ok  HTML preview inlines local files');
+
+// Which function a line is in
+const py = ['import os', '', 'class Greeter:', '    def greet(self, name):', '        if name:', '            return name', '', 'def main():', '    x = 1', '', 'print(1)'];
+assert.equal(enclosingBlock(py, 5).name, 'greet');
+assert.equal(enclosingBlock(py, 3).name, 'greet', 'the definition line itself');
+assert.equal(enclosingBlock(py, 8).name, 'main');
+assert.equal(enclosingBlock(py, 10), null, 'top-level code');
+const js = ['function add(a, b) {', '  if (a) {', '    return a + b;', '  }', '}', '', 'const mul = (a, b) => {', '  return a * b;', '};', 'class Box {', '  open() {', '    this.x = 1;', '  }', '}'];
+assert.equal(enclosingBlock(js, 2).name, 'add', 'if blocks are not functions');
+assert.equal(enclosingBlock(js, 7).name, 'mul');
+assert.equal(enclosingBlock(js, 11).name, 'open');
+assert.equal(enclosingBlock(js, 5), null);
+const java = ['public class Main {', '    public static int sum(int[] xs) {', '        int t = 0;', '        return t;', '    }', '}'];
+assert.equal(enclosingBlock(java, 3).name, 'sum');
+assert.equal(enclosingBlock(['fn main() {', '    let x = 1;', '}'], 1).name, 'main');
+assert.equal(enclosingBlock(['func (s *Server) Start() error {', '	return nil', '}'], 1).name, 'Start');
+assert.deepEqual(definitions(py).map((d) => d.name), ['Greeter', 'greet', 'main']);
+console.log('ok  finds the function around a line');
+
+// Call graph
+const src = ['def load(path):', '    return parse(read(path))', '', 'def parse(text):', '    return text.split()', '', 'def main():', '    data = load("x")', '    print(len(data))'].join('\n');
+const g = callGraph('f1', src, [{ name: 'read', fileId: 'f2', file: 'io.py', line: 0 }]);
+assert.match(g.code, /n0\["load\(\)"\]/);
+assert.ok(g.code.includes(' --> '), 'has edges');
+const edgesOf = (code) => code.split('\n').filter((l) => l.includes('-->')).map((l) => l.trim());
+const names = Object.fromEntries(Object.entries(g.targets).map(([id, t]) => [id, t]));
+assert.equal(edgesOf(g.code).length, 3, 'load->parse, load->read, main->load');
+assert.ok(g.code.includes('read() · io.py'), 'functions from other files are labelled');
+assert.deepEqual(g.targets[Object.keys(g.targets).find((k) => k.startsWith('x'))], { fileId: 'f2', line: 1 });
+assert.equal(names.n0.line, 1);
+assert.equal(callGraph('f', 'x = 1').empty, true);
+console.log('ok  call graph links functions to what they call');
 
 // Daily challenges are complete
 for (const c of CHALLENGES) {

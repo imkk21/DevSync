@@ -42,6 +42,8 @@ export function EditorSettingsFields() {
           <Switch label="Line numbers" checked={s.lineNumbers} onChange={(lineNumbers) => s.update({ lineNumbers })} />
           <Switch label="Minimap" hint="A zoomed-out view of the file along the right edge." checked={s.minimap} onChange={(minimap) => s.update({ minimap })} />
           <Switch label="Format on save" hint="Tidy JavaScript, TypeScript, JSON, CSS and HTML when you press Save." checked={s.formatOnSave} onChange={(formatOnSave) => s.update({ formatOnSave })} />
+          <Switch label="Show who wrote what" hint="A coloured bar beside each line in the colour of whoever wrote it." checked={s.authorship} onChange={(authorship) => s.update({ authorship })} />
+          <Switch label="Highlight pasted code" hint="Outlines large pastes. Always on in interviews and classroom copies." checked={s.highlightPastes} onChange={(highlightPastes) => s.update({ highlightPastes })} />
           <Switch label="Vim keys" hint="Modal editing with Vim keybindings. The mode shows under the editor." checked={s.vim} onChange={(vim) => s.update({ vim })} />
         </div>
       </div>

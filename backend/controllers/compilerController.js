@@ -1,4 +1,5 @@
-import { submitCode, getSubmissionResult, decodeResult, runBatch } from '../services/judge0Service.js';
+import { submitCode, getSubmissionResult, decodeResult, runBatch, normalizeOutput } from '../services/judge0Service.js';
+import { recordScore } from '../services/testWatch.js';
 import { supabaseAdmin } from '../config/supabase.js';
 import { broadcastToWorkspace } from '../collab.js';
 import { getRole, QUOTA } from '../services/access.js';
@@ -157,9 +158,6 @@ export async function runCode(req, res) {
   }
 }
 
-// Trailing spaces and blank lines at the end never decide a test
-export const normalizeOutput = (s) => (s || '').replace(/\r\n/g, '\n').split('\n').map((l) => l.trimEnd()).join('\n').trimEnd();
-
 // Runs the program once per test case: [{ id, passed, output }]
 export async function runTests(req, res) {
   const run = await parseRun(req);
@@ -182,6 +180,7 @@ export async function runTests(req, res) {
       return { id: t.id, passed: ran && normalizeOutput(output.stdout) === normalizeOutput(t.expected_output), output };
     });
     const passed = results.filter((r) => r.passed).length;
+    if (run.workspace_id) await recordScore(run.workspace_id, passed, results.length);
     await logRun(req, { ...run, stdin: null }, {
       stdout: `${passed}/${results.length} tests passed`,
       status: { description: passed === results.length ? 'Tests passed' : 'Tests failed' },

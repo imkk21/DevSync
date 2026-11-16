@@ -229,3 +229,74 @@
   border-radius: 2px 2px 2px 0;
   background: rgb(var(--brand));
 }
+
+/* Who wrote each line (editorExtras attachAuthorship) */
+.author-bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 1px;
+  background: var(--author);
+}
+.author-tone-0 { --author: rgb(var(--tone-0-fg)); }
+.author-tone-1 { --author: rgb(var(--tone-1-fg)); }
+.author-tone-2 { --author: rgb(var(--tone-2-fg)); }
+.author-tone-3 { --author: rgb(var(--tone-3-fg)); }
+.author-tone-4 { --author: rgb(var(--tone-4-fg)); }
+.author-tone-5 { --author: rgb(var(--tone-5-fg)); }
+
+/* A pinged line pulses */
+.ping-line { animation: ping-line 2.5s ease-out; }
+@keyframes ping-line {
+  0%, 30%, 60% { background: rgb(var(--brand) / 0.28); }
+  15%, 45% { background: rgb(var(--brand) / 0.08); }
+  100% { background: transparent; }
+}
+
+/* Ink over the code */
+.ink-layer { position: absolute; inset: 0; z-index: 8; pointer-events: none; }
+.ink-layer.ink-active { pointer-events: auto; cursor: crosshair; }
+
+/* Emoji reactions at the end of a line */
+.reaction-chip::after {
+  margin-left: 16px;
+  padding: 1px 6px;
+  border: 1px solid rgb(var(--line));
+  border-radius: 9999px;
+  background: rgb(var(--canvas-subtle));
+}
+.reaction-chip {
+  font-family: "Mona Sans", system-ui, sans-serif;
+  font-size: 12px;
+  color: rgb(var(--ink-muted));
+  cursor: pointer;
+}
+
+/* Large pastes, when highlighted */
+.paste-range {
+  background: rgb(var(--danger) / 0.08);
+  border-bottom: 1px dashed rgb(var(--danger) / 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ping-line { animation: none; background: rgb(var(--brand) / 0.2); }
+}
+
+/* Open suggestions (CodeEditor) */
+.suggestion-marker { cursor: pointer; }
+.suggestion-marker::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 3px;
+  bottom: 3px;
+  width: 4px;
+  border-radius: 2px;
+  background: #0969DA;
+}
+.suggestion-range { background: rgb(9 105 218 / 0.08); }
+.dark .suggestion-marker::before { background: #4493F8; }
+.dark .suggestion-range { background: rgb(68 147 248 / 0.12); }

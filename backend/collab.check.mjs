@@ -7,7 +7,8 @@ import { Server } from 'socket.io';
 import { io as connect } from '../frontend/node_modules/socket.io-client/build/esm/index.js';
 import { supabaseAdmin } from './config/supabase.js';
 import * as Y from 'yjs';
-import { initCollab, replaceFileContent, createVersion } from './collab.js';
+import { initCollab, replaceFileContent, createVersion, applySuggestion } from './collab.js';
+import { merge3 } from './services/merge.js';
 import { CollabClient } from '../frontend/src/lib/collab.js';
 
 // ---------- Fake Supabase (only the calls collab.js makes) ----------
@@ -15,6 +16,8 @@ const db = {
   files: [{ id: 'f1', workspace_id: 'w1', content: 'hello', is_folder: false }],
   file_states: [],
   doc_updates: [],
+  paste_events: [],
+  workspaces: [{ id: 'w1', public_token: 'pub-token-0123456789', classroom_id: null }],
   file_versions: [],
   workspace_members: [
     { workspace_id: 'w1', user_id: 'alice', role: 'owner' },
@@ -207,6 +210,79 @@ for (const row of db.doc_updates.filter((r) => r.file_id === 'f1')) Y.applyUpdat
 assert.equal(replay.getText('content').toString(), db.files[0].content);
 assert.ok(db.doc_updates.some((r) => r.user_ids.includes('bob')), 'replay knows who typed');
 console.log('ok  replay recording rebuilds the file step by step');
+
+// Authorship: each line knows who wrote it, taken from the updates themselves
+fb.doc.transact(() => fb.text.insert(fb.text.length, '\nwritten by bob'), 'local');
+await until(() => fa.text.toString().endsWith('written by bob'), 'bob line arrives');
+await until(() => fa.lineAuthors().at(-1) === 'bob', 'alice sees bob as the author');
+assert.ok(fa.lineAuthors().includes('alice'), 'alice wrote other lines');
+await until(() => Object.values(db.file_states[0].authors || {}).includes('bob'), 'authors saved');
+console.log('ok  every line knows who wrote it, and that is saved');
+
+// Signals (ping, ink) reach everyone else in the workspace with the sender attached
+const got = new Promise((r) => a.socket.once('signal', r));
+b.collab.signal('ping', { fileId: 'f1', line: 3 });
+const sig = await got;
+assert.equal(sig.from.id, 'bob');
+assert.deepEqual(sig.data, { fileId: 'f1', line: 3 });
+console.log('ok  pings and ink are relayed with who sent them');
+
+// Big pastes are recorded with who pasted them
+fb.reportPaste(0, 5, 1);
+await until(() => db.paste_events.length === 1, 'paste recorded');
+assert.equal(db.paste_events[0].user_id, 'bob');
+console.log('ok  pastes are recorded');
+
+// Mob mode: rotation info goes to everyone
+const driverMsg = new Promise((r) => b.socket.once('driver', r));
+assert.deepEqual(await a.collab.rotate(5), { ok: true });
+const msg = await driverMsg;
+assert.equal(msg.userId, 'alice');
+assert.equal(msg.rotation.minutes, 5);
+assert.ok((await c.collab.rotate(5)).error, 'viewers cannot start mob mode');
+await a.collab.setDriver(null);
+console.log('ok  mob mode starts with the caller and tells everyone when the next turn is');
+
+// Suggestions apply to the range they were made on, even after edits elsewhere, and refuse if it changed
+await until(() => fa.status === 'saved', 'saved before suggestion');
+const text0 = fa.text.toString();
+const target = text0.indexOf('written by bob');
+const sug = { anchorStart: fa.anchorAt(target), anchorEnd: fa.anchorAt(target + 'written by bob'.length), original: 'written by bob', replacement: 'rewritten by alice' };
+fa.doc.transact(() => fa.text.insert(0, '// header\n'), 'local'); // an edit before the range
+await until(() => fb.text.toString().startsWith('// header'), 'edit before range synced');
+assert.deepEqual(await applySuggestion('f1', 'w1', sug), { ok: true });
+await until(() => fb.text.toString().endsWith('rewritten by alice'), 'suggestion reaches editors');
+assert.ok((await applySuggestion('f1', 'w1', sug)).error, 'a second apply is refused: the text changed');
+console.log('ok  accepted suggestions land in the right place and stale ones are refused');
+
+// Three-way merge for forks
+assert.deepEqual(merge3('1\n2\n3\n4\n5', '1\nTWO\n3\n4\n5', '1\n2\n3\n4\nFIVE'), { text: '1\nTWO\n3\n4\nFIVE', conflict: false });
+assert.equal(merge3('a\nb\nc', 'a\nX\nc', 'a\nY\nc').conflict, true);
+assert.deepEqual(merge3('a', 'a', 'z'), { text: 'z', conflict: false });
+assert.deepEqual(merge3('a', 'q', 'a'), { text: 'q', conflict: false });
+console.log('ok  fork merges combine separate edits and flag real conflicts');
+
+// Live-stream spectators: no account, read-only, see the text live, can chat
+const guest = connect(`http://localhost:${port}`, { auth: { spectate: 'pub-token-0123456789', name: 'Guest <b>A</b>' }, transports: ['websocket'] });
+const guestCollab = new CollabClient(guest, 'w1', {});
+const gs = guestCollab.open('f1');
+await gs.ready;
+assert.equal(gs.text.toString(), fa.text.toString());
+fa.doc.transact(() => fa.text.insert(0, '@'), 'local');
+await until(() => gs.text.toString().startsWith('@'), 'spectator sees edits live');
+const beforeGuest = fa.text.toString();
+gs.doc.transact(() => gs.text.insert(0, 'GUEST'), 'local');
+await delay(400);
+assert.equal(fa.text.toString(), beforeGuest, 'spectator edits are refused');
+const chat = new Promise((r) => a.socket.once('spectate:chat', r));
+guest.emit('spectate:chat', { workspaceId: 'w1', text: 'hello from the stream' });
+const m = await chat;
+assert.equal(m.name, 'Guest bA/b', 'guest names are sanitised');
+assert.equal(m.text, 'hello from the stream');
+const badLink = await new Promise((r) => connect(`http://localhost:${port}`, { auth: { spectate: 'not-a-real-token-xyz' }, transports: ['websocket'], reconnection: false }).on('connect_error', (e) => r(e.message)));
+assert.match(badLink, /no longer shared/);
+guest.disconnect();
+console.log('ok  spectators watch live, cannot edit, can chat; bad links are refused');
 
 for (const x of [a, b, c]) x.socket.disconnect();
 server.io.close();

@@ -2,13 +2,57 @@ import { useEffect, useRef, useState } from 'react';
 import { GoCircleSlash, GoSync, GoX } from 'react-icons/go';
 import useEditorStore from '../../store/editorStore';
 import useThemeStore from '../../store/themeStore';
-import { buildHtmlPreview } from '../../lib/workspaceFiles';
+import { buildHtmlPreview, callGraph, definitions } from '../../lib/workspaceFiles';
 import { languageForFile } from '../../lib/languages';
+import { renderMermaid, inlineMermaid } from '../../lib/diagrams';
 
 export const previewKind = (file) => {
   const lang = file && !file.is_folder ? languageForFile(file.name) : null;
-  return lang === 'markdown' || lang === 'html' ? lang : null;
+  return ['markdown', 'html', 'mermaid'].includes(lang) ? lang : null;
 };
+
+// Code files get a call graph instead of a preview
+const NO_GRAPH = new Set(['markdown', 'html', 'css', 'json', 'plaintext', 'mermaid']);
+export const graphable = (file) => !!file && !file.is_folder && !NO_GRAPH.has(languageForFile(file.name));
+
+// Every function defined anywhere in the workspace, for linking diagrams to code
+function workspaceDefinitions(files, contentOf) {
+  return files.filter((f) => !f.is_folder && !NO_GRAPH.has(languageForFile(f.name))).flatMap((f) =>
+    definitions(contentOf(f.id).split('\n')).map((d) => ({ ...d, fileId: f.id, file: f.name })));
+}
+
+// A diagram drawn into the page (not a frame), so clicking a box can jump to that function
+function Diagram({ build, deps, onNodeClick }) {
+  const [svg, setSvg] = useState('');
+  const [error, setError] = useState('');
+  const theme = useThemeStore((s) => s.resolved);
+  useEffect(() => {
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const out = await build(theme);
+        if (!cancelled) { setSvg(out); setError(''); }
+      } catch (err) {
+        if (!cancelled) setError(String(err.message || err).split('\n')[0]);
+      }
+    }, 400);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [...deps, theme]);
+  return (
+    <div className="min-h-0 flex-1 overflow-auto p-4">
+      {error && <p className="mb-3 rounded-md border border-danger/25 bg-danger-soft px-3 py-2 font-mono text-code-sm text-danger">{error}</p>}
+      <div
+        className="mermaid-host [&_.node]:cursor-pointer [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:max-w-full"
+        onClick={(e) => {
+          const node = e.target.closest('.node');
+          if (node) onNodeClick(node);
+        }}
+        // Mermaid's output with securityLevel "strict": sanitised SVG, no scripts
+        dangerouslySetInnerHTML={{ __html: svg }}
+      />
+    </div>
+  );
+}
 
 const MD_COLORS = {
   light: { bg: '#FFFFFF', text: '#1F2328', muted: '#57606A', line: '#E5E7EB', subtle: '#F6F8F7', link: '#0A7A28' },
@@ -32,24 +76,28 @@ const LOG_TONE = { error: 'text-danger', warn: 'text-[#9A6700] dark:text-[#D2992
 
 // Live preview of the active Markdown or HTML file. HTML runs in a sandboxed frame with its
 // local CSS and JS inlined; its console output shows underneath.
-export default function PreviewPane({ file, onClose }) {
+export default function PreviewPane({ file, onClose, graph = false }) {
   const files = useEditorStore((s) => s.files);
   const contentOf = useEditorStore((s) => s.contentOf);
+  const revealAt = useEditorStore((s) => s.revealAt);
   const theme = useThemeStore((s) => s.resolved);
-  const kind = previewKind(file);
+  const kind = graph ? 'graph' : previewKind(file);
   const [doc, setDoc] = useState('');
   const [logs, setLogs] = useState([]);
   const [reloads, setReloads] = useState(0);
   const frame = useRef(null);
+  const graphTargets = useRef({});
 
   // Rebuild shortly after typing stops
   useEffect(() => {
     let cancelled = false;
     const t = setTimeout(async () => {
+      if (kind === 'graph' || kind === 'mermaid') return;
       const text = contentOf(file.id);
       if (kind === 'markdown') {
         const { marked } = await import('marked');
-        if (!cancelled) setDoc(markdownDocument(marked.parse(text), theme));
+        const withDiagrams = await inlineMermaid(text, theme);
+        if (!cancelled) setDoc(markdownDocument(marked.parse(withDiagrams), theme));
         return;
       }
       const byPath = new Map(files.filter((f) => !f.is_folder).map((f) => [f.path, f.id]));
@@ -76,7 +124,7 @@ export default function PreviewPane({ file, onClose }) {
   return (
     <section aria-label={`Preview of ${file.name}`} className="flex h-full min-w-0 flex-col bg-canvas">
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-line bg-canvas-subtle pl-3 pr-1.5">
-        <span className="truncate text-label-md text-ink">Preview</span>
+        <span className="truncate text-label-md text-ink">{kind === 'graph' ? 'Call graph' : 'Preview'}</span>
         <span className="truncate text-label-sm text-ink-subtle">{file.name}</span>
         <div className="ml-auto flex items-center">
           {kind === 'html' && (
@@ -89,6 +137,35 @@ export default function PreviewPane({ file, onClose }) {
           </button>
         </div>
       </div>
+      {kind === 'graph' && (
+        <Diagram
+          deps={[files, file.id]}
+          build={async (t) => {
+            const g = callGraph(file.id, contentOf(file.id), workspaceDefinitions(files, contentOf));
+            if (g.empty) return '<p style="font:14px system-ui;opacity:.7">No functions found in this file yet.</p>';
+            graphTargets.current = g.targets;
+            return renderMermaid(g.code, t);
+          }}
+          onNodeClick={(node) => {
+            const id = Object.keys(graphTargets.current).find((k) => node.id.includes(`-${k}-`));
+            const target = id && graphTargets.current[id];
+            if (target) revealAt(target.fileId, { line: target.line });
+          }}
+        />
+      )}
+      {kind === 'mermaid' && (
+        <Diagram
+          deps={[files, file.id]}
+          build={(t) => renderMermaid(contentOf(file.id), t)}
+          onNodeClick={(node) => {
+            // A box named like a function jumps to it: "parse", "parse()" or "parse(text)"
+            const label = node.textContent.trim().replace(/\(.*$/, '').trim();
+            const def = workspaceDefinitions(files, contentOf).find((d) => d.name === label);
+            if (def) revealAt(def.fileId, { line: def.line + 1 });
+          }}
+        />
+      )}
+      {(kind === 'html' || kind === 'markdown') && (
       <iframe
         ref={frame}
         title={`Preview of ${file.name}`}
@@ -97,6 +174,7 @@ export default function PreviewPane({ file, onClose }) {
         sandbox={kind === 'html' ? 'allow-scripts allow-modals allow-forms allow-popups' : 'allow-popups allow-popups-to-escape-sandbox'}
         className={`min-h-0 w-full flex-1 border-0 ${kind === 'html' ? 'bg-white' : 'bg-canvas'}`}
       />
+      )}
       {kind === 'html' && (
         <details className="group shrink-0 border-t border-line" open={errors > 0 || undefined}>
           <summary className="flex h-8 cursor-pointer list-none items-center gap-2 px-3 text-label-sm text-ink-muted hover:text-ink">
