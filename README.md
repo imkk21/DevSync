@@ -85,11 +85,13 @@ LIVEKIT_URL=               # huddles: wss://<project>.livekit.cloud (cloud.livek
 LIVEKIT_API_KEY=
 LIVEKIT_API_SECRET=
 PUBLIC_API_URL=            # this server's public https URL, used in calendar links
+VAPID_PUBLIC_KEY=          # phone/desktop notifications: npx web-push generate-vapid-keys
+VAPID_PRIVATE_KEY=
 ```
 
 ### Database
 
-Run every file in `supabase/migrations/` in the Supabase SQL Editor, in order (001 to 010).
+Run every file in `supabase/migrations/` in the Supabase SQL Editor, in order (001 to 011).
 
 ### 4. Run Locally
 
@@ -148,6 +150,7 @@ CI (`.github/workflows/ci.yml`) runs both plus the production build on every pus
 - 🎥 **Video messages** — Record your screen or camera and post it in chat
 - 🔔 **Slack and Discord alerts** — Broken or fixed tests, finished tasks, new events and new members, posted to a channel
 - 🗓️ **Calendar feed** — A private link that puts every workspace event in Google Calendar, Apple Calendar or Outlook
+- 📲 **App and notifications** — Install DevSync on a phone or desktop; mentions, replies, invites and event reminders arrive even when it's closed
 - ♿ **Accessibility** — Text size, readable font, high contrast, reduced motion, screen-reader announcements of collaborators
 
 ## Supported Languages

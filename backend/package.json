@@ -19,6 +19,7 @@
     "fflate": "^0.8.3",
     "node-diff3": "^3.2.1",
     "socket.io": "^4.8.3",
+    "web-push": "3.6.7",
     "yjs": "^13.6.33"
   },
   "engines": {

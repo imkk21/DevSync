@@ -6,7 +6,8 @@ import { restoreVersion, deleteAccount } from '../controllers/fileController.js'
 import { acceptSuggestion, rejectSuggestion } from '../controllers/reviewController.js';
 import { getPublicReplay, runPublic } from '../controllers/classroomController.js';
 import { getPortfolio } from '../controllers/peopleController.js';
-import { calendarIcs, getCalendarFeed, resetCalendarFeed, deleteCalendarFeed } from '../controllers/integrationsController.js';
+import { calendarIcs, getCalendarFeed, resetCalendarFeed, deleteCalendarFeed, savePushDevice, deletePushDevice } from '../controllers/integrationsController.js';
+import { pushKey } from '../services/push.js';
 
 const router = Router();
 
@@ -18,6 +19,9 @@ router.get('/calendar/:token.ics', calendarIcs); // no sign-in: the token is the
 router.get('/me/calendar', authMiddleware, getCalendarFeed);
 router.post('/me/calendar', authMiddleware, resetCalendarFeed);
 router.delete('/me/calendar', authMiddleware, deleteCalendarFeed);
+router.get('/push/key', (req, res) => res.json({ key: pushKey })); // public: browsers need it to subscribe
+router.post('/me/push', authMiddleware, savePushDevice);
+router.delete('/me/push', authMiddleware, deletePushDevice);
 router.post('/invites/claim', authMiddleware, claimInvites);
 router.get('/invites/:token', authMiddleware, previewInvite);
 router.post('/invites/:token/accept', authMiddleware, acceptInvite);
