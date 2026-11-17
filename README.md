@@ -127,7 +127,7 @@ CI (`.github/workflows/ci.yml`) runs both plus the production build on every pus
 - 🔒 **Row-Level Security** — Secure data isolation per workspace bypassing RLS recursion
 - ✍️ **Co-editing** — Yjs-based simultaneous editing, live cursors, offline edits, your-own undo
 - ⌨️ **Editor** — Command palette, quick open, search & replace across files, split view, Vim keys, zen mode, settings
-- 👀 **Preview** — Live HTML/CSS/JS preview with console, Markdown preview
+- 👀 **Preview** — Live HTML/CSS/JS preview with console (stays on the page while you edit its CSS or JS), Markdown preview
 - 🧪 **Running** — Multi-file runs, program arguments, test cases, shared run history
 - 🕘 **History** — Automatic versions, checkpoints, diffs, restore, session replay, activity and access log
 - 🔗 **Sharing** — Invite links, email invites for new users, public read-only links, templates, duplicate, pin, archive

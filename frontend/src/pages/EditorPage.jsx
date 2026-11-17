@@ -19,7 +19,7 @@ import SearchPanel from '../components/editor/SearchPanel';
 import CommentsPanel from '../components/editor/CommentsPanel';
 import ChatPanel from '../components/editor/ChatPanel';
 import ActivityPanel from '../components/editor/ActivityPanel';
-import PreviewPane, { previewKind, graphable } from '../components/editor/PreviewPane';
+import PreviewPane, { previewTarget, graphable } from '../components/editor/PreviewPane';
 import CommandPalette from '../components/editor/CommandPalette';
 import SettingsModal from '../components/editor/SettingsModal';
 import ShortcutsModal from '../components/editor/ShortcutsModal';
@@ -508,7 +508,7 @@ export default function EditorPage() {
       { id: 'format', label: 'Format document', shortcut: ['Shift', 'Alt', 'F'], hidden: !activeFile || readOnly, run: () => runEditorAction('editor.action.formatDocument') },
       { id: 'find', label: 'Find in file', shortcut: [MOD, 'F'], hidden: !activeFile, run: () => runEditorAction('actions.find') },
       { id: 'split', label: rightPane?.type === 'split' ? 'Close split editor' : 'Split editor', shortcut: [MOD, '\\'], hidden: !activeFile, run: () => setRightPane(rightPane?.type === 'split' ? null : { type: 'split', fileId: activeFileId }) },
-      { id: 'preview', label: rightPane?.type === 'preview' ? 'Close preview' : 'Open preview', hidden: !previewKind(activeFile), run: () => setRightPane(rightPane?.type === 'preview' ? null : { type: 'preview' }) },
+      { id: 'preview', label: rightPane?.type === 'preview' ? 'Close preview' : 'Open preview', hidden: !previewTarget(activeFile, files, rightPane?.fileId), run: () => setRightPane(rightPane?.type === 'preview' ? null : { type: 'preview', fileId: previewTarget(activeFile, files, rightPane?.fileId).id }) },
       { id: 'zen', label: zen ? 'Leave zen mode' : 'Zen mode: just the code', run: () => toggleZen() },
       { id: 'sidebar', label: sidebarOpen ? 'Hide side panel' : 'Show side panel', shortcut: [MOD, 'B'], run: () => setSidebarOpen((o) => !o) },
       { id: 'comments', label: 'Show comments', run: () => openPanel('comments') },
@@ -559,7 +559,7 @@ export default function EditorPage() {
       { id: 'shortcuts', label: 'Keyboard shortcuts', shortcut: ['?'], run: () => setModal('shortcuts') },
       { id: 'tour', label: 'Show the tour again', run: () => setModal('tour') },
     ];
-  }, [activeFile, activeFileId, readOnly, runnable, rightPane, zen, sidebarOpen, canEdit, isOwner, driver, rotation, presence, following, user?.id, currentWorkspace, modal, inkMode, authorship, view]);
+  }, [activeFile, activeFileId, files, readOnly, runnable, rightPane, zen, sidebarOpen, canEdit, isOwner, driver, rotation, presence, following, user?.id, currentWorkspace, modal, inkMode, authorship, view]);
 
   // Keyboard shortcuts that work everywhere, including inside the editor
   useEffect(() => {
@@ -589,7 +589,8 @@ export default function EditorPage() {
 
   const filePath = activeFile?.path?.replace(/^\//, '') || activeFile?.name;
   const splitFileId = rightPane?.type === 'split' && openFiles.some((f) => f.id === rightPane.fileId) ? rightPane.fileId : null;
-  const showPreview = rightPane?.type === 'preview' && previewKind(activeFile);
+  const previewFile = rightPane?.type === 'preview' ? previewTarget(activeFile, files, rightPane.fileId) : null;
+  const showPreview = !!previewFile;
   const showGraph = rightPane?.type === 'graph' && graphable(activeFile);
   const followed = following && presence.find((u) => u.id === following);
 
@@ -853,7 +854,7 @@ export default function EditorPage() {
                 {showGraph ? (
                   <PreviewPane key={`graph-${activeFile.id}`} file={activeFile} graph onClose={() => setRightPane(null)} />
                 ) : showPreview ? (
-                  <PreviewPane file={activeFile} onClose={() => setRightPane(null)} />
+                  <PreviewPane file={previewFile} onClose={() => setRightPane(null)} />
                 ) : (
                   <SplitPane fileId={splitFileId} readOnly={readOnly} onClose={() => setRightPane(null)} />
                 )}
