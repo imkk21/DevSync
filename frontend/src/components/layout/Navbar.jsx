@@ -68,7 +68,8 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const isLanding = pathname === '/';
   const name = profile?.display_name || user?.email || '';
-  const avatar = profile?.avatar_url || user?.user_metadata?.avatar_url;
+  // Your chosen picture once the profile has loaded (empty means initials); the sign-in picture until then
+  const avatar = profile ? profile.avatar_url : user?.user_metadata?.avatar_url;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);

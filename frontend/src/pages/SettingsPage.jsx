@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
-import Avatar from '../components/ui/Avatar';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Alert from '../components/ui/Alert';
@@ -10,6 +9,8 @@ import { EditorSettingsFields } from '../components/editor/SettingsModal';
 import useAuthStore from '../store/authStore';
 import { api } from '../lib/api';
 import { toast } from '../store/toastStore';
+import AvatarPicker from '../components/settings/AvatarPicker';
+import { isUploadedAvatar, removeOldAvatars } from '../lib/avatars';
 
 function Section({ title, description, children }) {
   return (
@@ -34,22 +35,33 @@ export default function SettingsPage() {
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // The profile loads in the background: fill in only the fields you haven't touched yet,
+  // so it never overwrites what you've already picked or typed
+  const touched = useRef({ name: false, avatar: false });
+  const filledFor = useRef(null);
   useEffect(() => {
-    setName(profile?.display_name || '');
-    setAvatar(profile?.avatar_url || '');
+    if (!profile || filledFor.current === profile.id) return;
+    filledFor.current = profile.id;
+    if (!touched.current.name) setName(profile.display_name || '');
+    if (!touched.current.avatar) setAvatar(profile.avatar_url || '');
   }, [profile]);
+  const chooseAvatar = (url) => {
+    touched.current.avatar = true;
+    setAvatar(url);
+  };
 
   const save = async (e) => {
     e.preventDefault();
     const display = name.trim();
     if (!display) return setError('Enter a name.');
-    if (avatar && !/^https:\/\//.test(avatar.trim())) return setError('The picture must be an https:// link.');
     setSaving(true);
     setError('');
-    const { error: err } = await updateProfile({ display_name: display.slice(0, 60), avatar_url: avatar.trim() || null });
+    const { error: err } = await updateProfile({ display_name: display.slice(0, 60), avatar_url: avatar || null });
     setSaving(false);
-    if (err) setError(err.message);
-    else toast('Profile saved', { tone: 'success' });
+    if (err) return setError(err.message);
+    toast('Profile saved', { tone: 'success' });
+    // Earlier uploads you've moved away from are deleted (keeps your folder to one photo)
+    removeOldAvatars(user.id, isUploadedAvatar(avatar) ? avatar : null).catch(() => {});
   };
 
   const deleteAccount = async () => {
@@ -74,12 +86,14 @@ export default function SettingsPage() {
         <div className="mt-8">
           <Section title="Profile" description="How collaborators see you: on cursors, comments and chat.">
             <form onSubmit={save} noValidate className="space-y-5">
-              <div className="flex items-center gap-4">
-                <Avatar name={name || user?.email} id={user?.id} src={avatar || undefined} size={48} />
-                <p className="text-body-sm text-ink-muted">Your picture comes from your sign-in provider unless you set a link below.</p>
-              </div>
-              <Input label="Display name" value={name} maxLength={60} onChange={(e) => { setName(e.target.value); setError(''); }} autoComplete="name" />
-              <Input label="Picture URL" hint="Optional. An https:// link to an image." value={avatar} onChange={(e) => { setAvatar(e.target.value); setError(''); }} placeholder="https://…" autoComplete="off" />
+              <AvatarPicker
+                userId={user?.id}
+                name={name || user?.email}
+                value={avatar}
+                onChange={chooseAvatar}
+                providerUrl={user?.user_metadata?.avatar_url || user?.user_metadata?.picture}
+              />
+              <Input label="Display name" value={name} maxLength={60} onChange={(e) => { touched.current.name = true; setName(e.target.value); setError(''); }} autoComplete="name" />
               {error && <Alert>{error}</Alert>}
               <Button type="submit" loading={saving}>Save profile</Button>
             </form>
