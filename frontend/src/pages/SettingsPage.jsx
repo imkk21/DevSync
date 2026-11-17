@@ -14,6 +14,7 @@ import PortfolioFields from '../components/settings/PortfolioFields';
 import AccessibilityFields from '../components/settings/AccessibilityFields';
 import CalendarFields from '../components/settings/CalendarFields';
 import AppFields from '../components/settings/AppFields';
+import GitHubFields from '../components/settings/GitHubFields';
 import { isUploadedAvatar, removeOldAvatars } from '../lib/avatars';
 
 function Section({ title, description, children }) {
@@ -107,6 +108,9 @@ export default function SettingsPage() {
             <PortfolioFields />
           </Section>
 
+          <Section title="GitHub" description="Import repos as workspaces and send changes back as pull requests.">
+            <GitHubFields />
+          </Section>
 
           <Section title="App and notifications" description="Use DevSync like an installed app, and hear about things when it's closed.">
             <AppFields />

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
+import { VscGithub } from 'react-icons/vsc';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   GoAlert, GoArrowLeft, GoCheck, GoCloudOffline, GoComment, GoCommentDiscussion, GoCommandPalette, GoEye,
@@ -51,6 +52,7 @@ const AssetsPanel = lazy(() => import('../components/editor/AssetsPanel'));
 const InsightsView = lazy(() => import('../components/views/InsightsView'));
 const CallPanel = lazy(() => import('../components/editor/CallPanel'));
 const AlertsModal = lazy(() => import('../components/workspace/AlertsModal'));
+const GitHubModal = lazy(() => import('../components/workspace/GitHubModal'));
 
 const VIEWS = [
   { id: 'code', label: 'Code' },
@@ -548,6 +550,7 @@ export default function EditorPage() {
       { id: 'review', label: 'Review flashcards', run: () => navigate('/review') },
       { id: 'huddle', label: 'Start or join a huddle', run: () => joinCall() },
       { id: 'alerts', label: 'Slack or Discord alerts', hidden: !isOwner, run: () => setModal('alerts') },
+      { id: 'github', label: 'Send to GitHub', run: () => setModal('github') },
       { id: 'graph', label: 'Show the call graph', hidden: !activeFile, run: () => setRightPane({ type: 'graph' }) },
       { id: 'interview', label: currentWorkspace?.interview_started_at ? 'End interview' : 'Start interview mode', hidden: !isOwner, run: () => setInterview(!currentWorkspace?.interview_started_at) },
       { id: 'settings', label: 'Editor settings', shortcut: [MOD, ','], run: () => setModal('settings') },
@@ -609,6 +612,7 @@ export default function EditorPage() {
     { label: 'Download as zip', icon: GoDownload, onSelect: () => downloadZip(currentWorkspace.name) },
     { label: 'Duplicate workspace', icon: GoDuplicate, onSelect: duplicate },
     { label: 'Fork to try an idea', icon: GoRepoForked, onSelect: fork },
+    { label: 'GitHub', icon: VscGithub, onSelect: () => setModal('github') },
     { label: 'Slack or Discord alerts', icon: GoBell, hidden: !isOwner, onSelect: () => setModal('alerts') },
     { label: 'Editor settings', icon: GoGear, onSelect: () => setModal('settings') },
   ];
@@ -902,6 +906,7 @@ export default function EditorPage() {
       <Suspense fallback={null}>
         {call && <CallPanel call={call} onLeave={() => setCall(null)} />}
         {isOwner && modal === 'alerts' && <AlertsModal isOpen onClose={() => setModal(null)} workspaceId={workspaceId} />}
+        {modal === 'github' && <GitHubModal isOpen onClose={() => setModal(null)} workspace={currentWorkspace} />}
       </Suspense>
     </div>
   );

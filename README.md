@@ -84,10 +84,14 @@ SENTRY_DSN=                # error reporting
 LIVEKIT_URL=               # huddles: wss://<project>.livekit.cloud (cloud.livekit.io)
 LIVEKIT_API_KEY=
 LIVEKIT_API_SECRET=
-PUBLIC_API_URL=            # this server's public https URL, used in calendar links
+PUBLIC_API_URL=            # this server's public https URL, used in calendar and GitHub links
 VAPID_PUBLIC_KEY=          # phone/desktop notifications: npx web-push generate-vapid-keys
 VAPID_PRIVATE_KEY=
+GITHUB_CLIENT_ID=          # GitHub sync: a GitHub OAuth app (see below)
+GITHUB_CLIENT_SECRET=
 ```
+
+**GitHub OAuth app:** GitHub › Settings › Developer settings › OAuth Apps › New OAuth App. Homepage URL: your site. Authorization callback URL: `<your API URL>/api/github/callback` (for example `https://your-api.onrender.com/api/github/callback`). Copy the Client ID, generate a client secret, and set both on the server. An OAuth app has one callback URL, so local development needs its own app pointing at `http://localhost:3001/api/github/callback`.
 
 ### Database
 
@@ -150,6 +154,7 @@ CI (`.github/workflows/ci.yml`) runs both plus the production build on every pus
 - 🎥 **Video messages** — Record your screen or camera and post it in chat
 - 🔔 **Slack and Discord alerts** — Broken or fixed tests, finished tasks, new events and new members, posted to a channel
 - 🗓️ **Calendar feed** — A private link that puts every workspace event in Google Calendar, Apple Calendar or Outlook
+- 🐙 **GitHub** — Import a repo as a workspace, send changes back as a pull request or a commit, or put a workspace in a new repo
 - 📲 **App and notifications** — Install DevSync on a phone or desktop; mentions, replies, invites and event reminders arrive even when it's closed
 - ♿ **Accessibility** — Text size, readable font, high contrast, reduced motion, screen-reader announcements of collaborators
 

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import useAuthStore from './store/authStore';
 import useSettingsStore from './store/settingsStore';
 import { PageLoader } from './components/ui/LoadingSpinner';
+import { finishGitHubReturn } from './lib/github';
 
 // Each page is its own chunk, so the landing page doesn't download the editor
 const LandingPage = lazy(() => import('./pages/LandingPage'));
@@ -71,6 +72,12 @@ export default function App() {
   useEffect(() => {
     initialize();
   }, [initialize]);
+
+  // Back from approving DevSync on GitHub: finish once signed in
+  const signedIn = useAuthStore((s) => !!s.user);
+  useEffect(() => {
+    if (signedIn) finishGitHubReturn();
+  }, [signedIn]);
 
   return (
     <div className="min-h-screen bg-canvas">
