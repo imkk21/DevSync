@@ -10,6 +10,29 @@ import Alert from '../ui/Alert';
 
 const slug = (name = '') => name.trim().toLowerCase().replace(/[^a-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'devsync-project';
 
+const list = (paths) => paths.map((p) => p.split('/').pop()).join(', ');
+
+// What "Get latest from GitHub" did
+function PullResult({ result: r }) {
+  if (r.upToDate) return <p className="mt-2 text-body-sm text-brand-fg">Already up to date with GitHub.</p>;
+  const parts = [
+    r.updated.length && `${r.updated.length} updated`,
+    r.added.length && `${r.added.length} added`,
+    r.deleted.length && `${r.deleted.length} deleted`,
+  ].filter(Boolean);
+  return (
+    <div className="mt-2 space-y-1.5 text-body-sm" role="status">
+      <p className="text-brand-fg">{parts.length || r.conflicts.length ? `Got the latest from GitHub${parts.length ? `: ${parts.join(', ')}` : ''}.` : 'Got the latest from GitHub. Nothing here needed changing.'}</p>
+      {r.conflicts.length > 0 && (
+        <p className="text-[#9A6700] dark:text-[#D29922]">
+          Changed both here and on GitHub: {list(r.conflicts)}. Where the same lines changed, both versions are kept: yours between <code className="font-mono">{'<<<<<<<'}</code> and <code className="font-mono">{'======='}</code>, GitHub's between <code className="font-mono">{'======='}</code> and <code className="font-mono">{'>>>>>>>'}</code>. Keep what's right and delete the rest, including those marker lines.
+        </p>
+      )}
+      {r.kept.length > 0 && <p className="text-ink-muted">Deleted on GitHub but edited here, so kept: {list(r.kept)}.</p>}
+    </div>
+  );
+}
+
 // Editor: send this workspace's changes to its GitHub repo, or (owner) put it in a new repo
 export default function GitHubModal({ isOpen, onClose, workspace }) {
   const [state, setState, loadError] = useGitHub(`/api/workspaces/${workspace.id}/github`, isOpen);
@@ -21,11 +44,14 @@ export default function GitHubModal({ isOpen, onClose, workspace }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(null); // { url, label }
+  const [pulled, setPulled] = useState(null); // what "Get latest" changed
+  const [pulling, setPulling] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
     setError('');
     setDone(null);
+    setPulled(null);
   }, [isOpen]);
 
   const run = async (fn) => {
@@ -47,6 +73,17 @@ export default function GitHubModal({ isOpen, onClose, workspace }) {
       setMessage('');
       setBranch('');
     });
+  };
+  const pull = async () => {
+    setPulling(true);
+    setError('');
+    setPulled(null);
+    try {
+      setPulled(await api(`/api/workspaces/${workspace.id}/github/pull`, { method: 'POST' }));
+    } catch (err) {
+      setError(err.message);
+    }
+    setPulling(false);
   };
   const createRepo = (e) => {
     e.preventDefault();
@@ -109,9 +146,16 @@ export default function GitHubModal({ isOpen, onClose, workspace }) {
           <span className="text-ink-muted">({link.branch})</span>
         </p>
         {!canPush ? (
-          <p className="text-body-sm text-ink-muted">Only editors can send changes to GitHub.</p>
+          <p className="text-body-sm text-ink-muted">Only editors can send changes to GitHub or get its latest.</p>
         ) : (
           <>
+            <div className="rounded-md border border-line bg-canvas-subtle p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-body-sm text-ink-muted">Merged a pull request, or did a teammate push? Bring those changes in here first.</p>
+                <Button type="button" variant="secondary" size="sm" loading={pulling} disabled={busy} onClick={pull}>Get latest from GitHub</Button>
+              </div>
+              {pulled && <PullResult result={pulled} />}
+            </div>
             <Input label="What changed?" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Fix the login bug" maxLength={200} autoFocus />
             <fieldset className="space-y-2">
               <legend className="text-label-md text-ink">How</legend>

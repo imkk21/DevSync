@@ -19,25 +19,28 @@ const STARTERS = {
   rust: '// Welcome to DevSync!\nfn main() {\n    println!("Hello, World!");\n}\n',
 };
 
-// Insert a file tree from paths ("src/app.py"); folders are created from the paths.
-// entries: [{ path, content, language, is_folder? }]. Returns Map(path -> new file id).
+// Insert a file tree from paths ("src/app.py"); missing folders are created from the paths, and
+// folders the workspace already has are reused (so adding files to an existing workspace works).
+// entries: [{ path, content, language, is_folder? }]. Returns Map(path -> file id).
 export async function insertTree(workspaceId, userId, entries) {
+  const { data: folders } = await supabaseAdmin.from('files').select('id, path').eq('workspace_id', workspaceId).eq('is_folder', true);
+  const ids = new Map((folders || []).map((f) => [f.path, f.id]));
   const rows = new Map();
   for (const e of entries) {
     const parts = String(e.path).split('/').filter(Boolean);
     if (parts.length === 0) continue;
     for (let i = 1; i < parts.length; i++) {
       const path = `/${parts.slice(0, i).join('/')}`;
-      if (!rows.has(path)) rows.set(path, { path, name: parts[i - 1], is_folder: true, depth: i });
+      if (!rows.has(path) && !ids.has(path)) rows.set(path, { path, name: parts[i - 1], is_folder: true, depth: i });
     }
     const path = `/${parts.join('/')}`;
+    if (e.is_folder && ids.has(path)) continue;
     rows.set(path, {
       path, name: parts.at(-1), depth: parts.length, is_folder: !!e.is_folder,
       content: e.is_folder ? null : String(e.content ?? ''), language: e.is_folder ? null : e.language || 'plaintext',
     });
   }
 
-  const ids = new Map();
   const depths = [...new Set([...rows.values()].map((r) => r.depth))].sort((a, b) => a - b);
   for (const depth of depths) {
     const batch = [...rows.values()].filter((r) => r.depth === depth).map(({ depth: _, ...r }) => ({

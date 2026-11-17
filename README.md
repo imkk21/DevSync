@@ -95,7 +95,7 @@ GITHUB_CLIENT_SECRET=
 
 ### Database
 
-Run every file in `supabase/migrations/` in the Supabase SQL Editor, in order (001 to 011).
+Run every file in `supabase/migrations/` in the Supabase SQL Editor, in order (001 to 012).
 
 ### 4. Run Locally
 
@@ -154,7 +154,9 @@ CI (`.github/workflows/ci.yml`) runs both plus the production build on every pus
 - 🎥 **Video messages** — Record your screen or camera and post it in chat
 - 🔔 **Slack and Discord alerts** — Broken or fixed tests, finished tasks, new events and new members, posted to a channel
 - 🗓️ **Calendar feed** — A private link that puts every workspace event in Google Calendar, Apple Calendar or Outlook
-- 🐙 **GitHub** — Import a repo as a workspace, send changes back as a pull request or a commit, or put a workspace in a new repo
+- 🐙 **GitHub** — Import a repo as a workspace, get the latest from GitHub (merged line by line with your edits), send changes back as a pull request or a commit, or put a workspace in a new repo
+- 🔎 **Search everything** — Workspaces, files, code, chat and tasks across every workspace you're in (press `/`)
+- 🕒 **Since you were last here** — The dashboard sums up what others did in each workspace since you left it
 - 📲 **App and notifications** — Install DevSync on a phone or desktop; mentions, replies, invites and event reminders arrive even when it's closed
 - ♿ **Accessibility** — Text size, readable font, high contrast, reduced motion, screen-reader announcements of collaborators
 

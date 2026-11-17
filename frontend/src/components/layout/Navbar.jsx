@@ -1,12 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { GoGear, GoPerson, GoRepo, GoSignOut, GoStack, GoX } from 'react-icons/go';
+import { GoGear, GoPerson, GoRepo, GoSearch, GoSignOut, GoStack, GoX } from 'react-icons/go';
 import useAuthStore from '../../store/authStore';
 import useDismiss from '../../hooks/useDismiss';
 import Logo from '../ui/Logo';
 import Avatar from '../ui/Avatar';
 import ThemeMenu, { ThemeSwitcher } from '../ui/ThemeMenu';
 import NotificationBell from './NotificationBell';
+
+const GlobalSearch = lazy(() => import('./GlobalSearch'));
 
 const SECTIONS = [
   { href: '#features', label: 'Features' },
@@ -74,6 +76,7 @@ export default function Navbar() {
   const { pathname } = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [searching, setSearching] = useState(false);
   const isLanding = pathname === '/';
   const name = profile?.display_name || user?.email || '';
   // Your chosen picture once the profile has loaded (empty means initials); the sign-in picture until then
@@ -85,6 +88,18 @@ export default function Navbar() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  // "/" opens search, unless you're typing somewhere
+  useEffect(() => {
+    if (!user) return undefined;
+    const onKey = (e) => {
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+      e.preventDefault();
+      setSearching(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [user]);
 
   const closeMobile = () => setMobileOpen(false);
 
@@ -116,6 +131,9 @@ export default function Navbar() {
               {pathname !== '/dashboard' && (
                 <Link to="/dashboard" className="btn btn-sm btn-secondary">Dashboard</Link>
               )}
+              <button type="button" onClick={() => setSearching(true)} className="icon-btn" aria-label="Search everything" title="Search everything (/)">
+                <GoSearch size={18} />
+              </button>
               <NotificationBell />
               <div className="ml-2">
                 <UserMenu user={user} profile={profile} name={name} avatar={avatar} onSignOut={signOut} />
@@ -165,6 +183,9 @@ export default function Navbar() {
                 <Link to="/dashboard" onClick={closeMobile} className="block rounded-md px-3 py-2.5 text-label-lg text-ink hover:bg-canvas-muted">
                   Your workspaces
                 </Link>
+                <button type="button" onClick={() => { closeMobile(); setSearching(true); }} className="block w-full rounded-md px-3 py-2.5 text-left text-label-lg text-ink hover:bg-canvas-muted">
+                  Search everything
+                </button>
                 <Link to="/review" onClick={closeMobile} className="block rounded-md px-3 py-2.5 text-label-lg text-ink hover:bg-canvas-muted">
                   Flashcards
                 </Link>
@@ -187,6 +208,11 @@ export default function Navbar() {
             )}
           </div>
         </div>
+      )}
+      {searching && (
+        <Suspense fallback={null}>
+          <GlobalSearch isOpen onClose={() => setSearching(false)} />
+        </Suspense>
       )}
     </header>
   );

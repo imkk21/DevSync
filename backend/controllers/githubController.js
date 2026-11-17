@@ -2,11 +2,13 @@
 // changes back as a commit or a pull request (or into a brand-new repo).
 import { supabaseAdmin } from '../config/supabase.js';
 import { getRole, canEdit, isOwner } from '../services/access.js';
-import { apiUrl, appUrl } from '../services/events.js';
-import { readTree, createWithFiles, quotaError } from './workspaceController.js';
+import { apiUrl, appUrl, logActivity } from '../services/events.js';
+import { merge3 } from '../services/merge.js';
+import { replaceFileContent } from '../collab.js';
+import { readTree, createWithFiles, insertTree, quotaError } from './workspaceController.js';
 import {
   gh, GitHubError, githubReady, makeState, readState, seal, unseal, tokenOf,
-  pickFiles, languageOf, mainLanguage, inBatches, REPO_RE, BRANCH_RE,
+  importable, pickFiles, blobText, languageOf, mainLanguage, inBatches, REPO_RE, BRANCH_RE,
 } from '../services/github.js';
 
 async function fail(res, error, userId) {
@@ -128,9 +130,8 @@ export async function githubImport(req, res) {
     const { tree, truncated } = await gh(token, `/repos/${info.full_name}/git/trees/${head.commit.commit.tree.sha}?recursive=1`);
     const { picked, skipped } = pickFiles(tree);
     const entries = (await inBatches(picked, 8, async (e) => {
-      const blob = await gh(token, `/repos/${info.full_name}/git/blobs/${e.sha}`);
-      const buf = Buffer.from(blob.content, 'base64');
-      return buf.includes(0) ? null : { path: e.path, content: buf.toString('utf8'), language: languageOf(e.path) }; // NUL byte: binary
+      const content = await blobText(token, info.full_name, e.sha);
+      return content === null ? null : { path: e.path, content, language: languageOf(e.path) };
     })).filter(Boolean);
     if (!entries.length) return res.status(400).json({ message: 'That repo has no text files DevSync can open.' });
 
@@ -165,12 +166,19 @@ export async function workspaceGithub(req, res) {
   }
 }
 
+// Conflict markers left by a merge: <<<<<<< ... ======= ... >>>>>>>, each at the start of a line
+export const CONFLICT_RE = /^<{7}(?: .*)?$[\s\S]*?^={7}$[\s\S]*?^>{7}(?: .*)?$/m;
+
 // One commit on top of `parent` holding the workspace as it is right now (live edits included).
 // Files deleted in DevSync since the last sync are deleted on GitHub; files DevSync never had
 // (images, lock files...) are left alone. Returns null when nothing changed.
 async function commitWorkspace(token, workspaceId, repo, parent, before, message) {
   const { files } = await readTree(workspaceId);
   const now = files.filter((f) => !f.is_folder).map((f) => ({ path: f.path.replace(/^\/+/, ''), content: f.content ?? '' }));
+  const unresolved = now.filter((f) => CONFLICT_RE.test(f.content)).map((f) => f.path);
+  if (unresolved.length) {
+    throw new GitHubError(409, `Resolve the conflicts first (the <<<<<<< ======= >>>>>>> lines) in ${unresolved.slice(0, 5).join(', ')}${unresolved.length > 5 ? ` and ${unresolved.length - 5} more` : ''}.`);
+  }
   const parentCommit = await gh(token, `/repos/${repo}/git/commits/${parent}`);
   const { tree: old } = await gh(token, `/repos/${repo}/git/trees/${parentCommit.tree.sha}?recursive=1`);
   const modes = new Map(old.filter((e) => e.type === 'blob').map((e) => [e.path, e.mode]));
@@ -213,7 +221,7 @@ export async function githubPush(req, res) {
       try {
         await gh(token, `/repos/${link.repo}/git/refs/heads/${link.branch}`, { method: 'PATCH', body: { sha: commit.sha, force: false } });
       } catch (e) {
-        if (e.status === 422) return res.status(409).json({ message: `${link.branch} has new commits on GitHub that DevSync doesn't have. Open a pull request instead.` });
+        if (e.status === 422) return res.status(409).json({ message: `${link.branch} has new commits on GitHub. Get them first with "Get latest from GitHub", or open a pull request instead.` });
         throw e;
       }
       await supabaseAdmin.from('github_links').update({ sha: commit.sha, paths: commit.paths, updated_at: new Date().toISOString() }).eq('workspace_id', id);
@@ -231,6 +239,88 @@ export async function githubPush(req, res) {
       body: { title: String(req.body?.title || '').trim().slice(0, 200) || message.split('\n')[0].slice(0, 200), head: branch, base: link.branch, body: message === 'Update from DevSync' ? 'Opened from DevSync.' : `${message}\n\nOpened from DevSync.` },
     });
     res.json({ url: pr.html_url });
+  } catch (error) {
+    fail(res, error, req.user.id);
+  }
+}
+
+// All blobs of a commit's tree: Map(path -> { sha, size, mode, path, type })
+async function blobsAt(token, repo, treeSha) {
+  const { tree } = await gh(token, `/repos/${repo}/git/trees/${treeSha}?recursive=1`);
+  return new Map(tree.filter((e) => e.type === 'blob').map((e) => [e.path, e]));
+}
+
+export const PULL_LIMIT = 300;
+
+// Bring what changed on GitHub since the last sync into the workspace (merged pull requests,
+// teammates' pushes). For each file GitHub changed:
+//   - untouched here: GitHub's version replaces it (or it's added, or deleted)
+//   - also changed here: the two are merged line by line, like git; overlapping edits keep both
+//     between <<<<<<< markers for someone to pick
+//   - deleted on GitHub but edited here: kept
+// Open editors update live. Files DevSync doesn't bring in (images, lock files...) are skipped.
+export async function githubPull(req, res) {
+  try {
+    const { id } = req.params;
+    if (!canEdit(await getRole(id, req.user.id))) return res.status(403).json({ message: 'Only editors can get changes from GitHub' });
+    const { data: link } = await supabaseAdmin.from('github_links').select('*').eq('workspace_id', id).maybeSingle();
+    if (!link) return res.status(404).json({ message: "This workspace isn't linked to a GitHub repo yet." });
+    const { token } = await tokenOf(req.user.id);
+
+    const head = await gh(token, `/repos/${link.repo}/branches/${encodeURIComponent(link.branch)}`);
+    if (head.commit.sha === link.sha) return res.json({ upToDate: true, updated: [], added: [], deleted: [], conflicts: [], kept: [] });
+    const baseCommit = await gh(token, `/repos/${link.repo}/git/commits/${link.sha}`);
+    const [before, after] = await Promise.all([blobsAt(token, link.repo, baseCommit.tree.sha), blobsAt(token, link.repo, head.commit.commit.tree.sha)]);
+    const changed = [...new Set([...before.keys(), ...after.keys()])].filter((p) => before.get(p)?.sha !== after.get(p)?.sha);
+    if (changed.length > PULL_LIMIT) {
+      return res.status(413).json({ message: `${changed.length} files changed on GitHub, more than DevSync pulls at once (${PULL_LIMIT}). Import the repo again as a new workspace instead.` });
+    }
+
+    const { files } = await readTree(id);
+    const here = new Map(files.filter((f) => !f.is_folder).map((f) => [f.path.replace(/^\/+/, ''), f]));
+    const synced = new Set(link.paths);
+    const out = { updated: [], added: [], deleted: [], conflicts: [], kept: [] };
+    const toAdd = [];
+    const toDelete = [];
+
+    await inBatches(changed, 8, async (p) => {
+      const was = before.get(p);
+      const now = after.get(p);
+      const mine = here.get(p);
+      if (!now) { // deleted on GitHub
+        if (!mine) return;
+        const base = was && importable(was) ? await blobText(token, link.repo, was.sha) : null;
+        if (base !== null && base === mine.content) {
+          toDelete.push(mine.id);
+          out.deleted.push(p);
+        } else out.kept.push(p);
+        return;
+      }
+      if (!importable(now)) return;
+      const theirs = await blobText(token, link.repo, now.sha);
+      if (theirs === null) return; // binary
+      if (!mine) { // new on GitHub, or deleted here while GitHub changed it: GitHub's work wins back
+        toAdd.push({ path: p, content: theirs, language: languageOf(p) });
+        out.added.push(p);
+        return;
+      }
+      const base = was && synced.has(p) ? (await blobText(token, link.repo, was.sha)) ?? '' : '';
+      const r = merge3(base, mine.content ?? '', theirs);
+      if (r.text === (mine.content ?? '')) return; // already has GitHub's change
+      await replaceFileContent(mine.id, id, r.text);
+      (r.conflict ? out.conflicts : out.updated).push(p);
+    });
+    if (toAdd.length) await insertTree(id, req.user.id, toAdd);
+    if (toDelete.length) await supabaseAdmin.from('files').delete().in('id', toDelete);
+
+    // Synced paths: what GitHub's latest has that we track. Files deleted here but not yet sent
+    // stay listed, so the next push still deletes them on GitHub.
+    const paths = [...new Set([...link.paths, ...out.added, ...here.keys()])].filter((p) => after.has(p) && !out.deleted.includes(p));
+    await supabaseAdmin.from('github_links').update({ sha: head.commit.sha, paths, updated_at: new Date().toISOString() }).eq('workspace_id', id);
+    const total = out.updated.length + out.added.length + out.deleted.length + out.conflicts.length;
+    if (total) await logActivity(id, req.user.id, 'github_pulled', { repo: link.repo, files: total });
+    for (const k of Object.keys(out)) out[k].sort();
+    res.json({ upToDate: false, ...out });
   } catch (error) {
     fail(res, error, req.user.id);
   }

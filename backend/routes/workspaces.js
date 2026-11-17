@@ -11,7 +11,8 @@ import { forkWorkspace, getForkChanges, mergeFork, setWatchTests } from '../cont
 import { getWall, freezeClass, sendHint, setHand, setRace, getRace } from '../controllers/classroomController.js';
 import { getInsights } from '../controllers/peopleController.js';
 import { getWebhook, saveWebhook, deleteWebhook, callToken } from '../controllers/integrationsController.js';
-import { workspaceGithub, githubPush, githubCreateRepo, githubUnlink } from '../controllers/githubController.js';
+import { markSeen } from '../controllers/searchController.js';
+import { workspaceGithub, githubPush, githubPull, githubCreateRepo, githubUnlink } from '../controllers/githubController.js';
 
 const router = Router();
 
@@ -37,8 +38,10 @@ router.get('/:id/webhook', getWebhook);
 router.put('/:id/webhook', saveWebhook);
 router.delete('/:id/webhook', deleteWebhook);
 router.post('/:id/call', callToken);
+router.post('/:id/seen', markSeen);
 router.get('/:id/github', workspaceGithub);
 router.post('/:id/github/push', githubPush);
+router.post('/:id/github/pull', githubPull);
 router.post('/:id/github/repo', githubCreateRepo);
 router.delete('/:id/github', githubUnlink);
 router.post('/:id/public', setPublicLink);
