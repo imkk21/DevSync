@@ -1,3 +1,4 @@
+import { pushOff } from '../lib/push';
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { authService } from '../services/authService';
@@ -104,7 +105,9 @@ const useAuthStore = create((set, get) => ({
   signOut: async () => {
     // Eagerly clear the state so the UI logs out instantly
     set({ user: null, session: null, profile: null, loading: false });
-    
+    // This device stops getting their notifications (needs the session, so before signing out)
+    await Promise.race([pushOff().catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);
+
     // Process the remote signout in the background
     try {
       await authService.signOut();

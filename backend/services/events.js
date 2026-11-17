@@ -48,6 +48,8 @@ export async function sendEmail({ to, subject, text, link }) {
   }
 }
 
+// This API's own public address (for links back to it): PUBLIC_API_URL, else the request's host
+export const apiUrl = (req, path = '') => `${(process.env.PUBLIC_API_URL || `${req.headers['x-forwarded-proto']?.split(',')[0] || req.protocol}://${req.get('host')}`).replace(/\/+$/, '')}${path}`;
 export const appUrl = (path = '') => `${(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '')}${path}`;
 
 export async function displayName(userId) {

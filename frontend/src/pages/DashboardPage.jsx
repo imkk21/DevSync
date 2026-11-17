@@ -4,6 +4,8 @@ import { GoArchive, GoColumns, GoDuplicate, GoPencil, GoPin, GoPlus, GoRepo, GoR
 import Navbar from '../components/layout/Navbar';
 import WorkspaceCard, { WorkspaceRow } from '../components/workspace/WorkspaceCard';
 import CreateWorkspaceModal from '../components/workspace/CreateWorkspaceModal';
+import ImportRepoModal from '../components/workspace/ImportRepoModal';
+import { VscGithub } from 'react-icons/vsc';
 import RenameWorkspaceModal from '../components/workspace/RenameWorkspaceModal';
 import LangDot from '../components/ui/LangDot';
 import { todaysChallenge, challengeWorkspace } from '../lib/templates';
@@ -127,6 +129,8 @@ export default function DashboardPage() {
   const { user, profile } = useAuthStore();
   const { workspaces, loading, error, fetchWorkspaces, createWorkspace, deleteWorkspace, leaveWorkspace, duplicateWorkspace, setPref } = useWorkspaceStore();
   const [showCreate, setShowCreate] = useState(false);
+  // ?import=github reopens the import dialog after connecting GitHub
+  const [showImport, setShowImport] = useState(() => new URLSearchParams(location.search).get('import') === 'github');
   const [renaming, setRenaming] = useState(null);
   const [pending, setPending] = useState(null); // { type: 'delete' | 'leave', workspace }
   const [busy, setBusy] = useState(false);
@@ -259,9 +263,14 @@ export default function DashboardPage() {
               {firstName ? `Welcome back, ${firstName}. ` : ''}Pick up where you left off.
             </p>
           </div>
-          <Button onClick={() => setShowCreate(true)} className="self-start sm:self-auto">
-            <GoPlus size={16} /> New workspace
-          </Button>
+          <div className="flex gap-2 self-start sm:self-auto">
+            <Button variant="secondary" onClick={() => { navigate('/dashboard?import=github', { replace: true }); setShowImport(true); }}>
+              <VscGithub size={16} aria-hidden="true" /> Import from GitHub
+            </Button>
+            <Button onClick={() => setShowCreate(true)}>
+              <GoPlus size={16} /> New workspace
+            </Button>
+          </div>
         </div>
 
         <DailyChallenge onStart={startChallenge} />
@@ -368,6 +377,7 @@ export default function DashboardPage() {
       </main>
 
       <CreateWorkspaceModal isOpen={showCreate} onClose={() => setShowCreate(false)} onCreate={handleCreate} />
+      <ImportRepoModal isOpen={showImport} onClose={() => { setShowImport(false); navigate('/dashboard', { replace: true }); }} />
       <RenameWorkspaceModal workspace={renaming} onClose={() => setRenaming(null)} />
 
       <ConfirmDialog

@@ -9,6 +9,7 @@ import { initCollab } from './collab.js';
 import './services/testWatch.js'; // reruns tests on save in workspaces that watch them
 import './services/reminders.js'; // event reminders, checked every minute
 import { startAlerts } from './services/alerts.js';
+import { startPush } from './services/push.js';
 
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -49,6 +50,7 @@ app.get('/api/health', (req, res) => {
 
 initCollab(io);
 startAlerts(); // Slack/Discord: finished tasks and new events
+startPush(); // phone and desktop notifications for new notifications
 
 // Routes
 app.use('/api/workspaces', workspaceRoutes);

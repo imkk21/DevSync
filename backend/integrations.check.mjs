@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { liveKitToken, buildCalendar } from './controllers/integrationsController.js';
 import { serviceOf } from './services/alerts.js';
+import { seal, unseal, makeState, readState, pickFiles, languageOf, mainLanguage, BRANCH_RE } from './services/github.js';
 
 // LiveKit token: a valid HS256 JWT with the room grant
 const token = liveKitToken({ key: 'APIkey', secret: 'shh', room: 'workspace-w1', identity: 'u1', name: 'Ada' });
@@ -41,6 +42,44 @@ const emoji = buildCalendar([{ id: 'e2', title: '🎉'.repeat(40), starts_at: '2
 assert.ok(emoji.split('\r\n').every((l) => Buffer.byteLength(l) <= 75), 'never splits inside a character');
 assert.ok(emoji.replace(/\r\n /g, '').includes('🎉'.repeat(40)));
 console.log('ok  calendar feed is valid iCalendar');
+
+// GitHub: tokens round-trip but are unreadable at rest; sign-in state can't be forged or altered
+process.env.GITHUB_CLIENT_SECRET = 'check-secret';
+const sealed = seal('gho_secret');
+assert.ok(!sealed.includes('gho_secret'));
+assert.equal(unseal(sealed), 'gho_secret');
+assert.notEqual(seal('gho_secret'), sealed, 'fresh IV each time');
+assert.throws(() => unseal(sealed.replace(/.$/, (c) => (c === 'A' ? 'B' : 'A'))), 'tampering is detected');
+const st = makeState('u1', '/dashboard');
+assert.deepEqual(readState(st), { userId: 'u1', next: '/dashboard' });
+assert.equal(readState(st.slice(0, -3) + 'abc'), null);
+const forged = Buffer.from(JSON.stringify({ u: 'attacker', n: '/', e: Date.now() + 1e6 })).toString('base64url');
+assert.equal(readState(`${forged}.${st.split('.')[1]}`), null);
+assert.equal(readState('garbage'), null);
+console.log('ok  GitHub tokens are sealed and sign-in state is signed');
+
+// Which repo files come in: text files, shallow first, no deps/build/binaries/lock files, within limits
+const tree = [
+  { path: 'src/app.js', type: 'blob', mode: '100644', size: 10 },
+  { path: 'index.html', type: 'blob', mode: '100644', size: 10 },
+  { path: 'node_modules/x/index.js', type: 'blob', mode: '100644', size: 10 },
+  { path: 'dist/bundle.js', type: 'blob', mode: '100644', size: 10 },
+  { path: 'logo.PNG', type: 'blob', mode: '100644', size: 10 },
+  { path: 'package-lock.json', type: 'blob', mode: '100644', size: 10 },
+  { path: 'link', type: 'blob', mode: '120000', size: 10 },
+  { path: 'huge.txt', type: 'blob', mode: '100644', size: 5_000_000 },
+  { path: 'src', type: 'tree', mode: '040000' },
+];
+const { picked, skipped } = pickFiles(tree);
+assert.deepEqual(picked.map((e) => e.path), ['index.html', 'src/app.js']);
+assert.equal(skipped, 6);
+assert.equal(pickFiles(Array.from({ length: 300 }, (_, i) => ({ path: `f${i}.py`, type: 'blob', mode: '100644', size: 1 }))).picked.length, 200);
+assert.equal(languageOf('src/App.TSX'), 'typescript');
+assert.equal(languageOf('Makefile'), 'plaintext');
+assert.equal(mainLanguage(['a.py', 'b.py', 'c.js', 'index.html', 'x.css']), 'python');
+assert.ok(BRANCH_RE.test('feature/login-fix') && BRANCH_RE.test('devsync-abc'));
+for (const bad of ['../x', '/x', 'a..b', 'a b', 'x.lock', 'x/', 'a//b', '']) assert.ok(!BRANCH_RE.test(bad), bad);
+console.log('ok  GitHub import picks the right files');
 
 console.log('\nAll integration checks passed');
 process.exit(0);

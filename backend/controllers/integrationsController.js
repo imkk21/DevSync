@@ -3,7 +3,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { supabaseAdmin } from '../config/supabase.js';
 import { getRole, isOwner } from '../services/access.js';
 import { ALERT_KINDS, serviceOf, postToHook, forgetHook } from '../services/alerts.js';
-import { appUrl, displayName } from '../services/events.js';
+import { apiUrl, appUrl, displayName } from '../services/events.js';
 
 const fail = (res, error) => res.status(error.status || 500).json({ message: error.message });
 
@@ -96,10 +96,7 @@ export async function callToken(req, res) {
 
 // ---------- Calendar feed: every event in your workspaces, as a subscribable .ics ----------
 
-const feedUrl = (req, token) => {
-  const base = process.env.PUBLIC_API_URL || `${req.headers['x-forwarded-proto']?.split(',')[0] || req.protocol}://${req.get('host')}`;
-  return `${base.replace(/\/+$/, '')}/api/calendar/${token}.ics`;
-};
+const feedUrl = (req, token) => apiUrl(req, `/api/calendar/${token}.ics`);
 
 export async function getCalendarFeed(req, res) {
   try {
@@ -187,5 +184,35 @@ export async function calendarIcs(req, res) {
     })), { name }));
   } catch (error) {
     res.status(500).type('text/plain').send(error.message);
+  }
+}
+
+// ---------- Push notifications: one row per device ----------
+
+const keyOk = (s) => typeof s === 'string' && /^[A-Za-z0-9_-]{8,200}={0,2}$/.test(s);
+
+// The browser's PushSubscription.toJSON(): { endpoint, keys: { p256dh, auth } }
+export async function savePushDevice(req, res) {
+  try {
+    const { endpoint, keys } = req.body || {};
+    if (typeof endpoint !== 'string' || !endpoint.startsWith('https://') || endpoint.length > 1000 || !keyOk(keys?.p256dh) || !keyOk(keys?.auth)) {
+      return res.status(400).json({ message: 'That push subscription looks wrong' });
+    }
+    // Keyed by device: whoever turned it on last on this browser gets its notifications
+    const { error } = await supabaseAdmin.from('push_subscriptions')
+      .upsert({ endpoint, user_id: req.user.id, p256dh: keys.p256dh, auth: keys.auth }, { onConflict: 'endpoint' });
+    if (error) throw error;
+    res.json({ on: true });
+  } catch (error) {
+    fail(res, error);
+  }
+}
+
+export async function deletePushDevice(req, res) {
+  try {
+    await supabaseAdmin.from('push_subscriptions').delete().eq('endpoint', String(req.body?.endpoint || '')).eq('user_id', req.user.id);
+    res.json({ on: false });
+  } catch (error) {
+    fail(res, error);
   }
 }

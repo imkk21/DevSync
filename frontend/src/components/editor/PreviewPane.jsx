@@ -11,6 +11,16 @@ export const previewKind = (file) => {
   return ['markdown', 'html', 'mermaid'].includes(lang) ? lang : null;
 };
 
+// What the preview shows: the active page, or while you edit CSS or JS, the page you were
+// previewing (else the workspace's index.html), so you can watch it change as you type
+export function previewTarget(active, files, pinnedId) {
+  if (previewKind(active)) return active;
+  if (!active || !['css', 'javascript'].includes(languageForFile(active.name))) return null;
+  const pages = files.filter((f) => !f.is_folder && previewKind(f) === 'html');
+  const index = pages.filter((f) => /^index\.html?$/i.test(f.name)).sort((a, b) => a.path.length - b.path.length)[0];
+  return pages.find((f) => f.id === pinnedId) || index || (pages.length === 1 ? pages[0] : null);
+}
+
 // Code files get a call graph instead of a preview
 const NO_GRAPH = new Set(['markdown', 'html', 'css', 'json', 'plaintext', 'mermaid']);
 export const graphable = (file) => !!file && !file.is_folder && !NO_GRAPH.has(languageForFile(file.name));
@@ -80,6 +90,8 @@ export default function PreviewPane({ file, onClose, graph = false }) {
   const files = useEditorStore((s) => s.files);
   const contentOf = useEditorStore((s) => s.contentOf);
   const revealAt = useEditorStore((s) => s.revealAt);
+  const pinnedId = useEditorStore((s) => s.rightPane?.fileId);
+  const setRightPane = useEditorStore((s) => s.setRightPane);
   const theme = useThemeStore((s) => s.resolved);
   const kind = graph ? 'graph' : previewKind(file);
   const [doc, setDoc] = useState('');
@@ -87,6 +99,11 @@ export default function PreviewPane({ file, onClose, graph = false }) {
   const [reloads, setReloads] = useState(0);
   const frame = useRef(null);
   const graphTargets = useRef({});
+
+  // Remember the page on screen, so switching to its CSS or JS keeps showing it
+  useEffect(() => {
+    if (kind === 'html' && pinnedId !== file.id) setRightPane({ type: 'preview', fileId: file.id });
+  }, [kind, file.id, pinnedId, setRightPane]);
 
   // Rebuild shortly after typing stops
   useEffect(() => {

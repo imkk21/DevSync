@@ -6,7 +6,9 @@ import { restoreVersion, deleteAccount } from '../controllers/fileController.js'
 import { acceptSuggestion, rejectSuggestion } from '../controllers/reviewController.js';
 import { getPublicReplay, runPublic } from '../controllers/classroomController.js';
 import { getPortfolio } from '../controllers/peopleController.js';
-import { calendarIcs, getCalendarFeed, resetCalendarFeed, deleteCalendarFeed } from '../controllers/integrationsController.js';
+import { calendarIcs, getCalendarFeed, resetCalendarFeed, deleteCalendarFeed, savePushDevice, deletePushDevice } from '../controllers/integrationsController.js';
+import { pushKey } from '../services/push.js';
+import { githubStatus, githubConnect, githubCallback, githubFinish, githubDisconnect, githubRepos, githubImport } from '../controllers/githubController.js';
 
 const router = Router();
 
@@ -18,6 +20,16 @@ router.get('/calendar/:token.ics', calendarIcs); // no sign-in: the token is the
 router.get('/me/calendar', authMiddleware, getCalendarFeed);
 router.post('/me/calendar', authMiddleware, resetCalendarFeed);
 router.delete('/me/calendar', authMiddleware, deleteCalendarFeed);
+router.get('/push/key', (req, res) => res.json({ key: pushKey })); // public: browsers need it to subscribe
+router.post('/me/push', authMiddleware, savePushDevice);
+router.delete('/me/push', authMiddleware, deletePushDevice);
+router.get('/github/callback', githubCallback); // no sign-in: GitHub sends the browser here
+router.get('/github', authMiddleware, githubStatus);
+router.post('/github/connect', authMiddleware, githubConnect);
+router.post('/github/finish', authMiddleware, githubFinish);
+router.delete('/github', authMiddleware, githubDisconnect);
+router.get('/github/repos', authMiddleware, githubRepos);
+router.post('/github/import', authMiddleware, githubImport);
 router.post('/invites/claim', authMiddleware, claimInvites);
 router.get('/invites/:token', authMiddleware, previewInvite);
 router.post('/invites/:token/accept', authMiddleware, acceptInvite);

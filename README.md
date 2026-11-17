@@ -84,12 +84,18 @@ SENTRY_DSN=                # error reporting
 LIVEKIT_URL=               # huddles: wss://<project>.livekit.cloud (cloud.livekit.io)
 LIVEKIT_API_KEY=
 LIVEKIT_API_SECRET=
-PUBLIC_API_URL=            # this server's public https URL, used in calendar links
+PUBLIC_API_URL=            # this server's public https URL, used in calendar and GitHub links
+VAPID_PUBLIC_KEY=          # phone/desktop notifications: npx web-push generate-vapid-keys
+VAPID_PRIVATE_KEY=
+GITHUB_CLIENT_ID=          # GitHub sync: a GitHub OAuth app (see below)
+GITHUB_CLIENT_SECRET=
 ```
+
+**GitHub OAuth app:** GitHub › Settings › Developer settings › OAuth Apps › New OAuth App. Homepage URL: your site. Authorization callback URL: `<your API URL>/api/github/callback` (for example `https://your-api.onrender.com/api/github/callback`). Copy the Client ID, generate a client secret, and set both on the server. An OAuth app has one callback URL, so local development needs its own app pointing at `http://localhost:3001/api/github/callback`.
 
 ### Database
 
-Run every file in `supabase/migrations/` in the Supabase SQL Editor, in order (001 to 010).
+Run every file in `supabase/migrations/` in the Supabase SQL Editor, in order (001 to 011).
 
 ### 4. Run Locally
 
@@ -127,7 +133,7 @@ CI (`.github/workflows/ci.yml`) runs both plus the production build on every pus
 - 🔒 **Row-Level Security** — Secure data isolation per workspace bypassing RLS recursion
 - ✍️ **Co-editing** — Yjs-based simultaneous editing, live cursors, offline edits, your-own undo
 - ⌨️ **Editor** — Command palette, quick open, search & replace across files, split view, Vim keys, zen mode, settings
-- 👀 **Preview** — Live HTML/CSS/JS preview with console, Markdown preview
+- 👀 **Preview** — Live HTML/CSS/JS preview with console (stays on the page while you edit its CSS or JS), Markdown preview
 - 🧪 **Running** — Multi-file runs, program arguments, test cases, shared run history
 - 🕘 **History** — Automatic versions, checkpoints, diffs, restore, session replay, activity and access log
 - 🔗 **Sharing** — Invite links, email invites for new users, public read-only links, templates, duplicate, pin, archive
@@ -148,6 +154,8 @@ CI (`.github/workflows/ci.yml`) runs both plus the production build on every pus
 - 🎥 **Video messages** — Record your screen or camera and post it in chat
 - 🔔 **Slack and Discord alerts** — Broken or fixed tests, finished tasks, new events and new members, posted to a channel
 - 🗓️ **Calendar feed** — A private link that puts every workspace event in Google Calendar, Apple Calendar or Outlook
+- 🐙 **GitHub** — Import a repo as a workspace, send changes back as a pull request or a commit, or put a workspace in a new repo
+- 📲 **App and notifications** — Install DevSync on a phone or desktop; mentions, replies, invites and event reminders arrive even when it's closed
 - ♿ **Accessibility** — Text size, readable font, high contrast, reduced motion, screen-reader announcements of collaborators
 
 ## Supported Languages

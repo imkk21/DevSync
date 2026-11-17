@@ -5,15 +5,15 @@ import useAuthStore from '../../store/authStore';
 import LangDot from '../ui/LangDot';
 import Avatar from '../ui/Avatar';
 import { MOD } from '../ui/Shortcut';
-import { previewKind, graphable } from './PreviewPane';
+import { previewTarget, graphable } from './PreviewPane';
 
 export default function EditorTabs() {
-  const { openFiles, activeFileId, activeFile, openFile, closeFile, fileStatus, presence, rightPane, setRightPane, inkMode, toggleInk } = useEditorStore();
+  const { files, openFiles, activeFileId, activeFile, openFile, closeFile, fileStatus, presence, rightPane, setRightPane, inkMode, toggleInk } = useEditorStore();
   const userId = useAuthStore((s) => s.user?.id);
   const watchResults = useEditorStore((s) => s.watchResults);
 
   if (openFiles.length === 0) return null;
-  const canPreview = !!previewKind(activeFile);
+  const previewFile = previewTarget(activeFile, files, rightPane?.fileId);
 
   return (
     <div className="flex h-9 shrink-0 bg-canvas-subtle">
@@ -105,14 +105,14 @@ export default function EditorTabs() {
             <VscTypeHierarchySub size={16} />
           </button>
         )}
-        {canPreview && (
+        {previewFile && (
           <button
             type="button"
-            onClick={() => setRightPane(rightPane?.type === 'preview' ? null : { type: 'preview' })}
+            onClick={() => setRightPane(rightPane?.type === 'preview' ? null : { type: 'preview', fileId: previewFile.id })}
             aria-pressed={rightPane?.type === 'preview'}
             className={`icon-btn h-7 w-7 ${rightPane?.type === 'preview' ? 'bg-canvas-muted text-ink' : ''}`}
-            aria-label="Preview"
-            title="Preview"
+            aria-label={`Preview ${previewFile.name}`}
+            title={`Preview ${previewFile.name}`}
           >
             <VscOpenPreview size={16} />
           </button>
