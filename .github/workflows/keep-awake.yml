@@ -1,0 +1,18 @@
+name: Keep backend awake
+
+# Render's free plan sleeps after 15 idle minutes, which makes the next visit slow and misses
+# Slack/Discord alerts and reminders. A ping every 10 minutes keeps it up (one free service
+# running all month fits in Render's 750 free hours). GitHub only runs schedules from the
+# default branch (main), sometimes a few minutes late, and pauses them after 60 days with no
+# commits; "Run workflow" on the Actions tab turns it back on.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - run: curl -fsS --retry 3 --retry-delay 20 --max-time 60 https://devsync-api-esv2.onrender.com/api/health
