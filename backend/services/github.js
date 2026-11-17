@@ -83,17 +83,20 @@ const SKIP_EXT = new Set(('png jpg jpeg gif webp ico bmp tiff psd svgz pdf zip g
   + 'woff woff2 ttf otf eot mp3 mp4 m4a mov avi mkv wav ogg webm flac pyc wasm bin dat db sqlite lockb').split(' '));
 const SKIP_NAME = new Set(['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'Cargo.lock', 'poetry.lock', 'composer.lock', 'Gemfile.lock', '.DS_Store']);
 
-// From a recursive git tree: the text-looking files to bring in, smallest folders first, within the limits
+// Would DevSync bring in this git tree entry? Text-looking files, not dependencies, builds, binaries or huge files
+export function importable(e) {
+  if (e.type !== 'blob' || e.mode === '120000' || e.size > IMPORT_LIMITS.fileBytes) return false;
+  const name = e.path.split('/').pop();
+  const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+  return !SKIP_DIR.test(e.path) && !SKIP_EXT.has(ext) && !SKIP_NAME.has(name);
+}
+
+// From a recursive git tree: the files to bring in, smallest folders first, within the limits
 export function pickFiles(tree) {
   const out = [];
   let bytes = 0;
   const candidates = tree
-    .filter((e) => e.type === 'blob' && e.mode !== '120000' && e.size <= IMPORT_LIMITS.fileBytes)
-    .filter((e) => {
-      const name = e.path.split('/').pop();
-      const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
-      return !SKIP_DIR.test(e.path) && !SKIP_EXT.has(ext) && !SKIP_NAME.has(name);
-    })
+    .filter(importable)
     .sort((a, b) => a.path.split('/').length - b.path.split('/').length || a.path.localeCompare(b.path));
   for (const e of candidates) {
     if (out.length >= IMPORT_LIMITS.files || bytes + e.size > IMPORT_LIMITS.bytes) break;
@@ -119,6 +122,13 @@ export function mainLanguage(paths) {
     if (RUNNABLE.has(l)) counts[l] = (counts[l] || 0) + 1;
   }
   return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'javascript';
+}
+
+// A file's text from GitHub, or null for binary content
+export async function blobText(token, repo, sha) {
+  const blob = await gh(token, `/repos/${repo}/git/blobs/${sha}`);
+  const buf = Buffer.from(blob.content, 'base64');
+  return buf.includes(0) ? null : buf.toString('utf8');
 }
 
 // Run `fn` over items, a few at a time (GitHub frowns on bursts)

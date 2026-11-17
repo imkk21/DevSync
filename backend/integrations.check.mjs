@@ -49,7 +49,10 @@ const sealed = seal('gho_secret');
 assert.ok(!sealed.includes('gho_secret'));
 assert.equal(unseal(sealed), 'gho_secret');
 assert.notEqual(seal('gho_secret'), sealed, 'fresh IV each time');
-assert.throws(() => unseal(sealed.replace(/.$/, (c) => (c === 'A' ? 'B' : 'A'))), 'tampering is detected');
+const [iv, tag, data] = sealed.split('.');
+const flipped = Buffer.from(data, 'base64url');
+flipped[0] ^= 1;
+assert.throws(() => unseal([iv, tag, flipped.toString('base64url')].join('.')), 'tampering is detected');
 const st = makeState('u1', '/dashboard');
 assert.deepEqual(readState(st), { userId: 'u1', next: '/dashboard' });
 assert.equal(readState(st.slice(0, -3) + 'abc'), null);
@@ -80,6 +83,22 @@ assert.equal(mainLanguage(['a.py', 'b.py', 'c.js', 'index.html', 'x.css']), 'pyt
 assert.ok(BRANCH_RE.test('feature/login-fix') && BRANCH_RE.test('devsync-abc'));
 for (const bad of ['../x', '/x', 'a..b', 'a b', 'x.lock', 'x/', 'a//b', '']) assert.ok(!BRANCH_RE.test(bad), bad);
 console.log('ok  GitHub import picks the right files');
+
+// GitHub pull: unresolved merge conflicts are spotted before anything is sent
+const { CONFLICT_RE } = await import('./controllers/githubController.js');
+assert.ok(CONFLICT_RE.test('a\n<<<<<<<\nmine\n=======\ntheirs\n>>>>>>>\nb\n'));
+assert.ok(CONFLICT_RE.test('<<<<<<< DevSync\nx\n=======\ny\n>>>>>>> GitHub'));
+assert.ok(!CONFLICT_RE.test('const s = "<<<<<<< not at a line start ======= >>>>>>>";'));
+assert.ok(!CONFLICT_RE.test('<<<<<<<\nno end marker\n'));
+console.log('ok  leftover conflict markers are detected');
+
+// Search: user text is matched literally, lines are found case-insensitively
+const { containsPattern, matchingLines } = await import('./controllers/searchController.js');
+assert.equal(containsPattern('100%_done\\'), '%100\\%\\_done\\\\%');
+assert.deepEqual(matchingLines('def greet():\n  pass\nGREET()\nx\ngreet\ngreet', 'greet'), [
+  { line: 1, text: 'def greet():' }, { line: 3, text: 'GREET()' }, { line: 5, text: 'greet' },
+]);
+console.log('ok  search patterns and matching lines');
 
 console.log('\nAll integration checks passed');
 process.exit(0);

@@ -8,6 +8,7 @@ import { getPublicReplay, runPublic } from '../controllers/classroomController.j
 import { getPortfolio } from '../controllers/peopleController.js';
 import { calendarIcs, getCalendarFeed, resetCalendarFeed, deleteCalendarFeed, savePushDevice, deletePushDevice } from '../controllers/integrationsController.js';
 import { pushKey } from '../services/push.js';
+import { search, getUpdates } from '../controllers/searchController.js';
 import { githubStatus, githubConnect, githubCallback, githubFinish, githubDisconnect, githubRepos, githubImport } from '../controllers/githubController.js';
 
 const router = Router();
@@ -20,6 +21,8 @@ router.get('/calendar/:token.ics', calendarIcs); // no sign-in: the token is the
 router.get('/me/calendar', authMiddleware, getCalendarFeed);
 router.post('/me/calendar', authMiddleware, resetCalendarFeed);
 router.delete('/me/calendar', authMiddleware, deleteCalendarFeed);
+router.get('/search', authMiddleware, search);
+router.get('/me/updates', authMiddleware, getUpdates);
 router.get('/push/key', (req, res) => res.json({ key: pushKey })); // public: browsers need it to subscribe
 router.post('/me/push', authMiddleware, savePushDevice);
 router.delete('/me/push', authMiddleware, deletePushDevice);

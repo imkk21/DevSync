@@ -53,6 +53,7 @@ const InsightsView = lazy(() => import('../components/views/InsightsView'));
 const CallPanel = lazy(() => import('../components/editor/CallPanel'));
 const AlertsModal = lazy(() => import('../components/workspace/AlertsModal'));
 const GitHubModal = lazy(() => import('../components/workspace/GitHubModal'));
+const GlobalSearch = lazy(() => import('../components/layout/GlobalSearch'));
 
 const VIEWS = [
   { id: 'code', label: 'Code' },
@@ -283,10 +284,11 @@ export default function EditorPage() {
     init();
   }, [workspaceId, fetchWorkspace, fetchFiles, reset]);
 
-  // Links from notifications: ?file=<id> opens a file, ?panel=chat opens a panel
+  // Links from notifications and search: ?file=<id> opens a file (at ?line=<n>), ?panel=chat opens a panel
   useEffect(() => {
     if (loading) return;
     const fileId = searchParams.get('file');
+    const line = Number(searchParams.get('line')) || null;
     const panel = searchParams.get('panel');
     const linkedView = searchParams.get('view');
     if (VIEWS.some((v) => v.id === linkedView)) {
@@ -296,13 +298,27 @@ export default function EditorPage() {
     }
     if (!fileId && !panel) return;
     const file = files.find((f) => f.id === fileId);
-    if (file) useEditorStore.getState().openFile(file);
-    if (panel || fileId) {
+    if (file && line) useEditorStore.getState().revealAt(file.id, { line });
+    else if (file) useEditorStore.getState().openFile(file);
+    if (panel || (fileId && !line)) {
       setSidebarOpen(true);
       setSidebarPanel(panel || 'comments');
     }
     setSearchParams({}, { replace: true });
   }, [loading, searchParams]);
+
+  // The dashboard's "since you were last here" counts from when you leave
+  useEffect(() => {
+    if (!workspaceId) return undefined;
+    const seen = () => api(`/api/workspaces/${workspaceId}/seen`, { method: 'POST' }).catch(() => {});
+    seen();
+    const onHide = () => document.visibilityState === 'hidden' && seen();
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      seen();
+    };
+  }, [workspaceId]);
 
   // Real-time editing, presence, cursors and pair mode (Socket.io + Yjs)
   useEffect(() => {
@@ -550,7 +566,8 @@ export default function EditorPage() {
       { id: 'review', label: 'Review flashcards', run: () => navigate('/review') },
       { id: 'huddle', label: 'Start or join a huddle', run: () => joinCall() },
       { id: 'alerts', label: 'Slack or Discord alerts', hidden: !isOwner, run: () => setModal('alerts') },
-      { id: 'github', label: 'Send to GitHub', run: () => setModal('github') },
+      { id: 'github', label: 'GitHub: send changes or get the latest', run: () => setModal('github') },
+      { id: 'search-all', label: 'Search all workspaces', run: () => setModal('search') },
       { id: 'graph', label: 'Show the call graph', hidden: !activeFile, run: () => setRightPane({ type: 'graph' }) },
       { id: 'interview', label: currentWorkspace?.interview_started_at ? 'End interview' : 'Start interview mode', hidden: !isOwner, run: () => setInterview(!currentWorkspace?.interview_started_at) },
       { id: 'settings', label: 'Editor settings', shortcut: [MOD, ','], run: () => setModal('settings') },
@@ -907,6 +924,7 @@ export default function EditorPage() {
         {call && <CallPanel call={call} onLeave={() => setCall(null)} />}
         {isOwner && modal === 'alerts' && <AlertsModal isOpen onClose={() => setModal(null)} workspaceId={workspaceId} />}
         {modal === 'github' && <GitHubModal isOpen onClose={() => setModal(null)} workspace={currentWorkspace} />}
+        {modal === 'search' && <GlobalSearch isOpen onClose={() => setModal(null)} />}
       </Suspense>
     </div>
   );

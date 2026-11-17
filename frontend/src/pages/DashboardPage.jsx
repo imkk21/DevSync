@@ -5,6 +5,7 @@ import Navbar from '../components/layout/Navbar';
 import WorkspaceCard, { WorkspaceRow } from '../components/workspace/WorkspaceCard';
 import CreateWorkspaceModal from '../components/workspace/CreateWorkspaceModal';
 import ImportRepoModal from '../components/workspace/ImportRepoModal';
+import SinceLastVisit from '../components/workspace/SinceLastVisit';
 import { VscGithub } from 'react-icons/vsc';
 import RenameWorkspaceModal from '../components/workspace/RenameWorkspaceModal';
 import LangDot from '../components/ui/LangDot';
@@ -275,6 +276,7 @@ export default function DashboardPage() {
 
         <DailyChallenge onStart={startChallenge} />
         <UpNext userId={user?.id} />
+        <SinceLastVisit workspaces={workspaces} />
 
         {/* Toolbar: one row on desktop; on phones the filters drop to their own full-width row */}
         <div className="mt-8 flex flex-wrap items-center gap-3">
