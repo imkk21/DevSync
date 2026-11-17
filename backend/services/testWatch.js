@@ -4,6 +4,8 @@ import { zipSync, strToU8 } from 'fflate';
 import { supabaseAdmin } from '../config/supabase.js';
 import { saveHooks, readFileContent, broadcastToWorkspace } from '../collab.js';
 import { runBatch, normalizeOutput } from './judge0Service.js';
+import { alert } from './alerts.js';
+import { displayName } from './events.js';
 
 export const JUDGE0_IDS = { javascript: 63, typescript: 74, python: 71, java: 62, c: 50, cpp: 54, go: 60, rust: 73, ruby: 72, php: 68, csharp: 51 };
 const DEBOUNCE = 1500;
@@ -81,6 +83,14 @@ async function run(fileId, workspaceId, editorId) {
       fileId, results, passed, total: results.length, at: Date.now(),
       broken, brokenBy: broken.length ? editorId : null, fixed: !!fixed, fixedBy: fixed ? editorId : null,
     });
+    if (broken.length || fixed) {
+      const { data: f } = await supabaseAdmin.from('files').select('path').eq('id', fileId).maybeSingle();
+      const where = f?.path?.replace(/^\//, '') || 'a file';
+      const who = editorId ? await displayName(editorId) : 'Someone';
+      alert(workspaceId, 'tests', broken.length
+        ? `${who}'s edit broke ${broken.length} ${broken.length === 1 ? 'test' : 'tests'} in ${where}`
+        : `All tests pass again in ${where} (fixed by ${who})`, { path: f ? `?file=${fileId}` : '' });
+    }
   } catch (err) {
     console.error(`Watched tests failed for ${fileId}:`, err.message);
   } finally {

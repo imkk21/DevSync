@@ -81,11 +81,15 @@ EMAIL_FROM=DevSync <invites@your-domain.com>
 UPSTASH_REDIS_REST_URL=    # shares the run rate limit across server instances
 UPSTASH_REDIS_REST_TOKEN=
 SENTRY_DSN=                # error reporting
+LIVEKIT_URL=               # huddles: wss://<project>.livekit.cloud (cloud.livekit.io)
+LIVEKIT_API_KEY=
+LIVEKIT_API_SECRET=
+PUBLIC_API_URL=            # this server's public https URL, used in calendar links
 ```
 
 ### Database
 
-Run every file in `supabase/migrations/` in the Supabase SQL Editor, in order (001 to 009).
+Run every file in `supabase/migrations/` in the Supabase SQL Editor, in order (001 to 010).
 
 ### 4. Run Locally
 
@@ -140,6 +144,10 @@ CI (`.github/workflows/ci.yml`) runs both plus the production build on every pus
 - 🎯 **Wellbeing** — Focus mode that holds back notifications, weekly check-ins, celebrations, a late-night nudge
 - 🪪 **Portfolios** — Public page at `/u/<username>` with chosen projects and an activity heatmap
 - 🧠 **Flashcards** — Save failed tests or code as cards, review them with spaced repetition
+- 📞 **Huddles** — Voice, video and screen sharing in every workspace (LiveKit)
+- 🎥 **Video messages** — Record your screen or camera and post it in chat
+- 🔔 **Slack and Discord alerts** — Broken or fixed tests, finished tasks, new events and new members, posted to a channel
+- 🗓️ **Calendar feed** — A private link that puts every workspace event in Google Calendar, Apple Calendar or Outlook
 - ♿ **Accessibility** — Text size, readable font, high contrast, reduced motion, screen-reader announcements of collaborators
 
 ## Supported Languages

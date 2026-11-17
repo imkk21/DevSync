@@ -1,10 +1,18 @@
 // Side effects of workspace actions: activity/audit log rows, notifications, optional email.
 // None of these may break the action itself, so failures are logged and swallowed.
 import { supabaseAdmin } from '../config/supabase.js';
+import { alert } from './alerts.js';
+
+const JOINS = new Set(['member_joined', 'member_added', 'student_joined']);
 
 export async function logActivity(workspaceId, userId, action, details = {}) {
   const { error } = await supabaseAdmin.from('activity').insert({ workspace_id: workspaceId, user_id: userId, action, details });
   if (error) console.error('Activity log failed:', error.message);
+  if (JOINS.has(action)) {
+    displayName(action === 'member_added' ? details.member : userId)
+      .then((name) => alert(workspaceId, 'members', `${name} joined`))
+      .catch(() => {});
+  }
 }
 
 export async function notify({ userId, actorId, workspaceId, type, body, link }) {

@@ -8,7 +8,8 @@ import MentionTextarea, { withMentions } from '../ui/MentionTextarea';
 import ToggleGroup from '../ui/ToggleGroup';
 import { socketService } from '../../services/socketService';
 import { usePolls, PollComposer, PollCard } from './Polls';
-import { GoGraph } from 'react-icons/go';
+import { GoGraph, GoDeviceCameraVideo } from 'react-icons/go';
+import { VideoRecorder, VideoAttachment } from './VideoMessage';
 
 // Live-stream viewers' chat (not stored): shown when someone watches through the public link
 function ViewerChat({ workspaceId }) {
@@ -47,6 +48,7 @@ const day = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: 'lon
 export default function ChatPanel({ workspaceId, userId, people, canEdit }) {
   const { polls, setPolls, votes, setVotes } = usePolls(workspaceId);
   const [composing, setComposing] = useState(false);
+  const [recording, setRecording] = useState(false);
   const messages = useEditorStore((s) => s.messages);
   const addMessage = useEditorStore((s) => s.addMessage);
   const spectators = useEditorStore((s) => s.spectators);
@@ -135,7 +137,10 @@ export default function ChatPanel({ workspaceId, userId, people, canEdit }) {
                       <PollCard poll={m} votes={votes} userId={userId} canClose={canEdit} onVote={vote} onClose={closePoll} />
                     </div>
                   ) : (
-                    <p className="mt-0.5 whitespace-pre-wrap break-words text-body-sm text-ink">{withMentions(m.body, names)}</p>
+                    <>
+                      <p className="mt-0.5 whitespace-pre-wrap break-words text-body-sm text-ink">{withMentions(m.body, names)}</p>
+                      {m.attachment?.kind === 'video' && <VideoAttachment attachment={m.attachment} />}
+                    </>
                   )}
                 </div>
               </div>
@@ -146,11 +151,17 @@ export default function ChatPanel({ workspaceId, userId, people, canEdit }) {
       <div className="shrink-0 border-t border-line p-3">
         <MentionTextarea value={body} onChange={setBody} onSubmit={send} people={people} placeholder="Message (Enter to send)" label="Message" />
         {canEdit && (
-          <button type="button" onClick={() => setComposing(true)} className="mt-2 inline-flex items-center gap-1.5 text-label-sm text-ink-muted hover:text-ink">
-            <GoGraph size={12} aria-hidden="true" /> New poll or quiz
-          </button>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            <button type="button" onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 text-label-sm text-ink-muted hover:text-ink">
+              <GoGraph size={12} aria-hidden="true" /> New poll or quiz
+            </button>
+            <button type="button" onClick={() => setRecording(true)} className="inline-flex items-center gap-1.5 text-label-sm text-ink-muted hover:text-ink">
+              <GoDeviceCameraVideo size={12} aria-hidden="true" /> Video message
+            </button>
+          </div>
         )}
       </div>
+      <VideoRecorder isOpen={recording} onClose={() => setRecording(false)} workspaceId={workspaceId} userId={userId} onSent={(m) => addMessage(m, false)} />
       <PollComposer isOpen={composing} onClose={() => setComposing(false)} workspaceId={workspaceId} userId={userId} onCreated={(p) => setPolls((list) => [...list.filter((x) => x.id !== p.id), p])} />
       </>
       )}

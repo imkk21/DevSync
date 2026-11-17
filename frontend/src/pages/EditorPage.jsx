@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   GoAlert, GoArrowLeft, GoCheck, GoCloudOffline, GoComment, GoCommentDiscussion, GoCommandPalette, GoEye,
   GoFileDirectory, GoHistory, GoPersonAdd, GoPlay, GoPulse, GoScreenFull, GoSearch, GoSidebarCollapse,
-  GoSidebarExpand, GoX, GoBookmark, GoDownload, GoDuplicate, GoGear, GoVideo, GoStopwatch, GoPeople, GoRepoForked, GoMortarBoard, GoPaperclip,
+  GoSidebarExpand, GoX, GoBookmark, GoDownload, GoDuplicate, GoGear, GoVideo, GoStopwatch, GoPeople, GoRepoForked, GoMortarBoard, GoPaperclip, GoDeviceCameraVideo, GoBell,
 } from 'react-icons/go';
 import useAuthStore from '../store/authStore';
 import useEditorStore from '../store/editorStore';
@@ -49,6 +49,8 @@ const WikiView = lazy(() => import('../components/views/WikiView'));
 const EventsView = lazy(() => import('../components/views/EventsView'));
 const AssetsPanel = lazy(() => import('../components/editor/AssetsPanel'));
 const InsightsView = lazy(() => import('../components/views/InsightsView'));
+const CallPanel = lazy(() => import('../components/editor/CallPanel'));
+const AlertsModal = lazy(() => import('../components/workspace/AlertsModal'));
 
 const VIEWS = [
   { id: 'code', label: 'Code' },
@@ -217,6 +219,9 @@ export default function EditorPage() {
   const [view, setView] = useState('code'); // code | tasks | wiki
   const [taskDraft, setTaskDraft] = useState(null); // from "Make a task from this line"
   const [cardDraft, setCardDraft] = useState(null); // new flashcard from selected code or a failed test
+  const [call, setCall] = useState(null); // { url, token } while you're in the huddle
+  const inCall = useRef(false);
+  inCall.current = !!call;
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(() => !isSmallScreen());
   const sidebar = useResizable({ storageKey: 'devsync:sidebar-width', initial: 272, min: 200, max: 480 });
@@ -235,6 +240,15 @@ export default function EditorPage() {
   );
   const nameOf = (id) => people.find((p) => p.id === id)?.name || 'Someone';
   const views = VIEWS.filter((v) => !v.owner || isOwner);
+  const joinCall = async () => {
+    if (inCall.current) return;
+    try {
+      setCall(await api(`/api/workspaces/${workspaceId}/call`, { method: 'POST' }));
+      socketService.collab?.signal('call', { joined: true }); // others get a Join button
+    } catch (err) {
+      toast(err.message, { tone: 'error' });
+    }
+  };
   useLateNightNudge();
 
   // On phones the sidebar is an overlay: get it out of the way once a file is picked
@@ -365,6 +379,9 @@ export default function EditorPage() {
           window.dispatchEvent(new CustomEvent('devsync:signal', { detail: payload }));
           // A ping on a file you're not looking at: offer to go there
           const { type, data, from } = payload;
+          if (type === 'call' && !inCall.current) {
+            toast(`${from.display_name || 'Someone'} joined the huddle`, { action: { label: 'Join', onClick: () => joinCall() }, duration: 15000 });
+          }
           if (type === 'ping' && data.fileId !== useEditorStore.getState().activeFileId) {
             const file = useEditorStore.getState().files.find((f) => f.id === data.fileId);
             if (file) toast(`${from.display_name || 'Someone'} is pointing at line ${data.line} of ${file.name}`, { action: { label: 'Go', onClick: () => useEditorStore.getState().revealAt(file.id, { line: data.line }) } });
@@ -529,6 +546,8 @@ export default function EditorPage() {
       { id: 'flashcard', label: 'Make a flashcard from selection', hidden: !activeFile, run: () => runEditorAction('devsync.flashcard') },
       { id: 'view-insights', label: 'Open insights', hidden: !isOwner, run: () => setView('insights') },
       { id: 'review', label: 'Review flashcards', run: () => navigate('/review') },
+      { id: 'huddle', label: 'Start or join a huddle', run: () => joinCall() },
+      { id: 'alerts', label: 'Slack or Discord alerts', hidden: !isOwner, run: () => setModal('alerts') },
       { id: 'graph', label: 'Show the call graph', hidden: !activeFile, run: () => setRightPane({ type: 'graph' }) },
       { id: 'interview', label: currentWorkspace?.interview_started_at ? 'End interview' : 'Start interview mode', hidden: !isOwner, run: () => setInterview(!currentWorkspace?.interview_started_at) },
       { id: 'settings', label: 'Editor settings', shortcut: [MOD, ','], run: () => setModal('settings') },
@@ -589,6 +608,7 @@ export default function EditorPage() {
     { label: 'Download as zip', icon: GoDownload, onSelect: () => downloadZip(currentWorkspace.name) },
     { label: 'Duplicate workspace', icon: GoDuplicate, onSelect: duplicate },
     { label: 'Fork to try an idea', icon: GoRepoForked, onSelect: fork },
+    { label: 'Slack or Discord alerts', icon: GoBell, hidden: !isOwner, onSelect: () => setModal('alerts') },
     { label: 'Editor settings', icon: GoGear, onSelect: () => setModal('settings') },
   ];
 
@@ -678,6 +698,16 @@ export default function EditorPage() {
                 <GoMortarBoard size={14} /> Class wall
               </Link>
             )}
+            <button
+              type="button"
+              onClick={() => (call ? setCall(null) : joinCall())}
+              aria-pressed={!!call}
+              className={`icon-btn hidden sm:inline-flex ${call ? 'bg-brand-soft text-brand-fg' : ''}`}
+              aria-label={call ? 'Leave huddle' : 'Start or join a huddle'}
+              title={call ? 'Leave huddle' : 'Huddle: talk, show your camera or share your screen'}
+            >
+              <GoDeviceCameraVideo size={16} />
+            </button>
             <FocusButton workspaceId={workspaceId} />
             <NotificationBell className="hidden sm:block" />
             <ThemeMenu className="hidden md:block" />
@@ -868,6 +898,10 @@ export default function EditorPage() {
       <FlashcardModal request={cardDraft} userId={user?.id} onClose={() => setCardDraft(null)} />
       <CheckinCard workspaceId={workspaceId} userId={user?.id} memberCount={members.length} />
       <Announcer userId={user?.id} />
+      <Suspense fallback={null}>
+        {call && <CallPanel call={call} onLeave={() => setCall(null)} />}
+        {isOwner && modal === 'alerts' && <AlertsModal isOpen onClose={() => setModal(null)} workspaceId={workspaceId} />}
+      </Suspense>
     </div>
   );
 }

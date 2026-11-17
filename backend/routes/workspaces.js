@@ -10,6 +10,7 @@ import { createCheckpoint } from '../controllers/fileController.js';
 import { forkWorkspace, getForkChanges, mergeFork, setWatchTests } from '../controllers/reviewController.js';
 import { getWall, freezeClass, sendHint, setHand, setRace, getRace } from '../controllers/classroomController.js';
 import { getInsights } from '../controllers/peopleController.js';
+import { getWebhook, saveWebhook, deleteWebhook, callToken } from '../controllers/integrationsController.js';
 
 const router = Router();
 
@@ -31,6 +32,10 @@ router.post('/:id/hand', setHand);
 router.post('/:id/race', setRace);
 router.get('/:id/race', getRace);
 router.get('/:id/insights', getInsights);
+router.get('/:id/webhook', getWebhook);
+router.put('/:id/webhook', saveWebhook);
+router.delete('/:id/webhook', deleteWebhook);
+router.post('/:id/call', callToken);
 router.post('/:id/public', setPublicLink);
 router.post('/:id/checkpoint', createCheckpoint);
 router.post('/:id/invite', inviteMember);

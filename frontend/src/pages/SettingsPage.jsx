@@ -12,6 +12,7 @@ import { toast } from '../store/toastStore';
 import AvatarPicker from '../components/settings/AvatarPicker';
 import PortfolioFields from '../components/settings/PortfolioFields';
 import AccessibilityFields from '../components/settings/AccessibilityFields';
+import CalendarFields from '../components/settings/CalendarFields';
 import { isUploadedAvatar, removeOldAvatars } from '../lib/avatars';
 
 function Section({ title, description, children }) {
@@ -103,6 +104,10 @@ export default function SettingsPage() {
 
           <Section title="Portfolio" description="A public page with your projects and activity. Only what you choose is shown.">
             <PortfolioFields />
+          </Section>
+
+          <Section title="Calendar" description="Events from all your workspaces in Google Calendar, Apple Calendar or Outlook.">
+            <CalendarFields />
           </Section>
 
           <Section title="Accessibility" description="Saved in this browser. Applies everywhere in DevSync.">
