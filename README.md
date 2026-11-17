@@ -85,7 +85,7 @@ SENTRY_DSN=                # error reporting
 
 ### Database
 
-Run every file in `supabase/migrations/` in the Supabase SQL Editor, in order (001 to 007).
+Run every file in `supabase/migrations/` in the Supabase SQL Editor, in order (001 to 009).
 
 ### 4. Run Locally
 
@@ -134,6 +134,13 @@ CI (`.github/workflows/ci.yml`) runs both plus the production build on every pus
 - 🏫 **Classroom** — Teacher wall of every student's copy, pause everyone, push hints, raised hands, timed races with a leaderboard
 - 📺 **Sharing live** — Spectator links with viewer chat and guest suggestions, embeddable code movies, live runnable embeds
 - 🗺️ **Diagrams** — Mermaid files and blocks, clickable call graph that jumps to the code
+- ✅ **Plan** — Task board linked to lines of code (tasks close when their tests pass), milestones, wiki with `[[links]]`, live whiteboard
+- 📅 **Team** — Polls and quizzes in chat, events with RSVPs, reminders and calendar files, shared files (10 MB each)
+- 📊 **Insights** — Owner analytics: activity, pass rate, people, busiest files, anonymous weekly mood
+- 🎯 **Wellbeing** — Focus mode that holds back notifications, weekly check-ins, celebrations, a late-night nudge
+- 🪪 **Portfolios** — Public page at `/u/<username>` with chosen projects and an activity heatmap
+- 🧠 **Flashcards** — Save failed tests or code as cards, review them with spaced repetition
+- ♿ **Accessibility** — Text size, readable font, high contrast, reduced motion, screen-reader announcements of collaborators
 
 ## Supported Languages
 

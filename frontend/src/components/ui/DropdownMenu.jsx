@@ -8,7 +8,7 @@ const GAP = 4;
 
 // "⋯" button with a menu. items: [{ label, icon: Icon, onSelect, danger?, hidden? } | 'divider']
 // The menu is portalled and positioned against the viewport, so scroll areas and cards never clip it.
-export default function DropdownMenu({ items, label = 'More actions', align = 'right', className = '', buttonClassName = '' }) {
+export default function DropdownMenu({ items, label = 'More actions', align = 'right', className = '', buttonClassName = '', trigger }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const buttonRef = useRef(null);
@@ -71,7 +71,7 @@ export default function DropdownMenu({ items, label = 'More actions', align = 'r
         title={label}
         className={`icon-btn ${buttonClassName}`}
       >
-        <GoKebabHorizontal size={16} />
+        {trigger || <GoKebabHorizontal size={16} />}
       </button>
       {open && createPortal(
         <div

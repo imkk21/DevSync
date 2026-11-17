@@ -9,6 +9,7 @@ import {
 import { createCheckpoint } from '../controllers/fileController.js';
 import { forkWorkspace, getForkChanges, mergeFork, setWatchTests } from '../controllers/reviewController.js';
 import { getWall, freezeClass, sendHint, setHand, setRace, getRace } from '../controllers/classroomController.js';
+import { getInsights } from '../controllers/peopleController.js';
 
 const router = Router();
 
@@ -29,6 +30,7 @@ router.post('/:id/hint', sendHint);
 router.post('/:id/hand', setHand);
 router.post('/:id/race', setRace);
 router.get('/:id/race', getRace);
+router.get('/:id/insights', getInsights);
 router.post('/:id/public', setPublicLink);
 router.post('/:id/checkpoint', createCheckpoint);
 router.post('/:id/invite', inviteMember);

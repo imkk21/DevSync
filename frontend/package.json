@@ -10,9 +10,11 @@
     "check": "node src/lib/workspaceFiles.check.mjs"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "@monaco-editor/react": "^4.6.0",
     "@sentry/react": "^11.10.0",
     "@supabase/supabase-js": "^2.39.3",
+    "dompurify": "^3.4.17",
     "fflate": "^0.8.3",
     "marked": "^18.0.2",
     "mermaid": "^11.17.2",

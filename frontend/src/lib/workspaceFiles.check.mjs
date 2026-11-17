@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { unzipSync, strFromU8 } from 'fflate';
 import { findMatches, replacementFor, resolvePath, zipFiles, toBase64, buildHtmlPreview, looksBinary, enclosingBlock, definitions, callGraph } from './workspaceFiles.js';
 import { CHALLENGES, todaysChallenge } from './templates.js';
+import { parseBoard, boardEdits, applyEdits } from './board.js';
+import { nextReview } from './flashcards.js';
 
 // Search
 const text = 'const a = 1;\nconst b = A + a;\n';
@@ -76,6 +78,38 @@ assert.deepEqual(g.targets[Object.keys(g.targets).find((k) => k.startsWith('x'))
 assert.equal(names.n0.line, 1);
 assert.equal(callGraph('f', 'x = 1').empty, true);
 console.log('ok  call graph links functions to what they call');
+
+// Whiteboard files
+const r1 = { id: 'r1', type: 'rectangle', version: 1 };
+const t1 = { id: 't1', type: 'text', version: 1 };
+let board = applyEdits('', boardEdits('', [r1, t1]));
+assert.deepEqual(parseBoard(board).map((e) => e.id).sort(), ['r1', 't1']);
+board = applyEdits(board, boardEdits(board, [{ ...r1, version: 2, x: 5 }]));
+assert.equal(board.split('\n').filter((l) => l.startsWith('r1\t')).length, 1, 'an update replaces its line');
+assert.equal(parseBoard(board).find((e) => e.id === 'r1').x, 5);
+const merged = `${board}r1\t${JSON.stringify({ ...r1, version: 9, x: 99 })}\nbroken\t{"id":\n`;
+assert.equal(parseBoard(merged).find((e) => e.id === 'r1').x, 99, 'the newest version wins after a merge');
+assert.equal(parseBoard(merged).length, 2, 'half-merged lines are skipped');
+assert.equal(parseBoard(applyEdits('r1\t{"id":"r1","version":1}', boardEdits('r1\t{"id":"r1","version":1}', [t1]))).length, 2, 'works without a trailing newline');
+console.log('ok  whiteboard files merge shape by shape');
+
+// Flashcard scheduling
+const now = Date.parse('2026-11-17T10:00:00Z');
+let card = { interval_days: 0, ease: 2.5, reps: 0 };
+const missed = nextReview(card, 'again', now);
+assert.equal(Date.parse(missed.due_at) - now, 10 * 60_000, 'a missed card comes back in 10 minutes');
+card = { ...card, ...nextReview(card, 'good', now) };
+assert.equal(card.interval_days, 1);
+card = { ...card, ...nextReview(card, 'good', now) };
+assert.equal(card.interval_days, 3);
+card = { ...card, ...nextReview(card, 'good', now) };
+assert.equal(card.interval_days, 8, '3 days x ease 2.5, rounded');
+const harder = nextReview(card, 'hard', now);
+const easier = nextReview(card, 'easy', now);
+assert.ok(harder.interval_days < easier.interval_days && harder.ease < easier.ease);
+assert.equal(nextReview({ interval_days: 40, ease: 1.3, reps: 9 }, 'again', now).reps, 0);
+assert.equal(nextReview({ interval_days: 1, ease: 1.3, reps: 5 }, 'hard', now).ease, 1.3, 'ease never drops below 1.3');
+console.log('ok  flashcards come back later when you know them');
 
 // Daily challenges are complete
 for (const c of CHALLENGES) {

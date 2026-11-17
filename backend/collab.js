@@ -16,7 +16,7 @@ const workspaceUsers = new Map(); // workspaceId -> Map(socketId -> { id, displa
 const docs = new Map(); // fileId -> entry (see loadDoc)
 const drivers = new Map(); // workspaceId -> userId: in pair mode only the driver can type
 const rotations = new Map(); // workspaceId -> { minutes, nextAt, timer }: mob mode hands the wheel on
-const SIGNALS = new Set(['ping', 'ink', 'ink:clear']);
+const SIGNALS = new Set(['ping', 'ink', 'ink:clear', 'board']); // relayed as-is to everyone else in the workspace; 'board' = whiteboard pointers
 const frozen = new Map(); // classroomId -> teacher's user id: students' copies are read-only
 const spectatorCounts = new Map(); // workspaceId -> number of live-stream viewers
 // Called after every successful save: (fileId, workspaceId, lastEditorId). Used by the test watcher.

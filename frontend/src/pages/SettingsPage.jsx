@@ -10,6 +10,8 @@ import useAuthStore from '../store/authStore';
 import { api } from '../lib/api';
 import { toast } from '../store/toastStore';
 import AvatarPicker from '../components/settings/AvatarPicker';
+import PortfolioFields from '../components/settings/PortfolioFields';
+import AccessibilityFields from '../components/settings/AccessibilityFields';
 import { isUploadedAvatar, removeOldAvatars } from '../lib/avatars';
 
 function Section({ title, description, children }) {
@@ -97,6 +99,14 @@ export default function SettingsPage() {
               {error && <Alert>{error}</Alert>}
               <Button type="submit" loading={saving}>Save profile</Button>
             </form>
+          </Section>
+
+          <Section title="Portfolio" description="A public page with your projects and activity. Only what you choose is shown.">
+            <PortfolioFields />
+          </Section>
+
+          <Section title="Accessibility" description="Saved in this browser. Applies everywhere in DevSync.">
+            <AccessibilityFields />
           </Section>
 
           <Section title="Editor" description="Saved in this browser.">

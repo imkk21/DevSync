@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { GoGear, GoRepo, GoSignOut, GoX } from 'react-icons/go';
+import { GoGear, GoPerson, GoRepo, GoSignOut, GoStack, GoX } from 'react-icons/go';
 import useAuthStore from '../../store/authStore';
 import useDismiss from '../../hooks/useDismiss';
 import Logo from '../ui/Logo';
@@ -22,7 +22,7 @@ function MenuIcon() {
   );
 }
 
-function UserMenu({ user, name, avatar, onSignOut }) {
+function UserMenu({ user, profile, name, avatar, onSignOut }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useDismiss(ref, open, () => setOpen(false));
@@ -49,6 +49,14 @@ function UserMenu({ user, name, avatar, onSignOut }) {
           <Link role="menuitem" to="/dashboard" onClick={() => setOpen(false)} className="menu-item">
             <GoRepo size={16} className="text-ink-muted" /> Your workspaces
           </Link>
+          <Link role="menuitem" to="/review" onClick={() => setOpen(false)} className="menu-item">
+            <GoStack size={16} className="text-ink-muted" /> Flashcards
+          </Link>
+          {profile?.username && (
+            <Link role="menuitem" to={`/u/${profile.username}`} onClick={() => setOpen(false)} className="menu-item">
+              <GoPerson size={16} className="text-ink-muted" /> Your public page
+            </Link>
+          )}
           <Link role="menuitem" to="/settings" onClick={() => setOpen(false)} className="menu-item">
             <GoGear size={16} className="text-ink-muted" /> Settings
           </Link>
@@ -110,7 +118,7 @@ export default function Navbar() {
               )}
               <NotificationBell />
               <div className="ml-2">
-                <UserMenu user={user} name={name} avatar={avatar} onSignOut={signOut} />
+                <UserMenu user={user} profile={profile} name={name} avatar={avatar} onSignOut={signOut} />
               </div>
             </>
           ) : (
@@ -156,6 +164,9 @@ export default function Navbar() {
                 </div>
                 <Link to="/dashboard" onClick={closeMobile} className="block rounded-md px-3 py-2.5 text-label-lg text-ink hover:bg-canvas-muted">
                   Your workspaces
+                </Link>
+                <Link to="/review" onClick={closeMobile} className="block rounded-md px-3 py-2.5 text-label-lg text-ink hover:bg-canvas-muted">
+                  Flashcards
                 </Link>
                 <Link to="/settings" onClick={closeMobile} className="block rounded-md px-3 py-2.5 text-label-lg text-ink hover:bg-canvas-muted">
                   Settings

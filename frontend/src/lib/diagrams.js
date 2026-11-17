@@ -2,9 +2,9 @@
 let mermaidPromise;
 let seq = 0;
 
-// Monaco's script loader puts an AMD `define` on window. Some of Mermaid's bundled libraries see it
+// Monaco's script loader puts an AMD `define` on window. Some libraries (Mermaid's, Excalidraw's) see it
 // and try to register as AMD modules, which throws. Hide it while Mermaid loads and draws.
-async function withoutAmd(fn) {
+export async function withoutAmd(fn) {
   const define = window.define;
   window.define = undefined;
   try {

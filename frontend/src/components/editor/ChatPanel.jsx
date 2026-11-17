@@ -7,6 +7,8 @@ import Avatar from '../ui/Avatar';
 import MentionTextarea, { withMentions } from '../ui/MentionTextarea';
 import ToggleGroup from '../ui/ToggleGroup';
 import { socketService } from '../../services/socketService';
+import { usePolls, PollComposer, PollCard } from './Polls';
+import { GoGraph } from 'react-icons/go';
 
 // Live-stream viewers' chat (not stored): shown when someone watches through the public link
 function ViewerChat({ workspaceId }) {
@@ -42,7 +44,9 @@ const time = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: 'numer
 const day = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 
 // Workspace chat. Messages arrive through Supabase Realtime (subscribed in EditorPage).
-export default function ChatPanel({ workspaceId, userId, people }) {
+export default function ChatPanel({ workspaceId, userId, people, canEdit }) {
+  const { polls, setPolls, votes, setVotes } = usePolls(workspaceId);
+  const [composing, setComposing] = useState(false);
   const messages = useEditorStore((s) => s.messages);
   const addMessage = useEditorStore((s) => s.addMessage);
   const spectators = useEditorStore((s) => s.spectators);
@@ -57,7 +61,20 @@ export default function ChatPanel({ workspaceId, userId, people }) {
   useEffect(() => {
     const el = list.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, polls.length]);
+
+  const vote = async (poll, choice) => {
+    setVotes((v) => [...v.filter((x) => !(x.poll_id === poll.id && x.user_id === userId)), { poll_id: poll.id, user_id: userId, choice }]);
+    const { error } = await supabase.from('poll_votes').upsert({ poll_id: poll.id, user_id: userId, workspace_id: workspaceId, choice });
+    if (error) toast(error.message, { tone: 'error' });
+  };
+  const closePoll = async (poll) => {
+    setPolls((list) => list.map((p) => (p.id === poll.id ? { ...p, closed: true } : p)));
+    const { error } = await supabase.from('polls').update({ closed: true }).eq('id', poll.id);
+    if (error) toast(error.message, { tone: 'error' });
+  };
+  // Messages and polls in one timeline
+  const feed = [...messages, ...polls.map((p) => ({ ...p, poll: true, user_id: p.created_by }))].sort((a, b) => a.created_at.localeCompare(b.created_at));
 
   const send = async () => {
     const text = body.trim();
@@ -89,17 +106,17 @@ export default function ChatPanel({ workspaceId, userId, people }) {
       {room === 'viewers' ? <ViewerChat workspaceId={workspaceId} /> : (
       <>
       <ol ref={list} className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3" aria-live="polite">
-        {messages.length === 0 && (
+        {feed.length === 0 && (
           <li className="px-2 py-8 text-center">
             <GoCommentDiscussion size={20} className="mx-auto text-ink-subtle" aria-hidden="true" />
             <p className="mt-3 text-body-sm text-ink-muted">Say hello. Type @ to mention someone.</p>
           </li>
         )}
-        {messages.map((m, i) => {
-          const prev = messages[i - 1];
+        {feed.map((m, i) => {
+          const prev = feed[i - 1];
           const newDay = !prev || day(prev.created_at) !== day(m.created_at);
           // Consecutive messages from one person within five minutes share a header
-          const grouped = !newDay && prev?.user_id === m.user_id && new Date(m.created_at) - new Date(prev.created_at) < 300_000;
+          const grouped = !newDay && !m.poll && !prev?.poll && prev?.user_id === m.user_id && new Date(m.created_at) - new Date(prev.created_at) < 300_000;
           const person = personOf(m.user_id);
           return (
             <li key={m.id}>
@@ -113,7 +130,13 @@ export default function ChatPanel({ workspaceId, userId, people }) {
                       <span className="shrink-0 text-label-sm text-ink-subtle">{time(m.created_at)}</span>
                     </div>
                   )}
-                  <p className="mt-0.5 whitespace-pre-wrap break-words text-body-sm text-ink">{withMentions(m.body, names)}</p>
+                  {m.poll ? (
+                    <div className="mt-1.5">
+                      <PollCard poll={m} votes={votes} userId={userId} canClose={canEdit} onVote={vote} onClose={closePoll} />
+                    </div>
+                  ) : (
+                    <p className="mt-0.5 whitespace-pre-wrap break-words text-body-sm text-ink">{withMentions(m.body, names)}</p>
+                  )}
                 </div>
               </div>
             </li>
@@ -122,7 +145,13 @@ export default function ChatPanel({ workspaceId, userId, people }) {
       </ol>
       <div className="shrink-0 border-t border-line p-3">
         <MentionTextarea value={body} onChange={setBody} onSubmit={send} people={people} placeholder="Message (Enter to send)" label="Message" />
+        {canEdit && (
+          <button type="button" onClick={() => setComposing(true)} className="mt-2 inline-flex items-center gap-1.5 text-label-sm text-ink-muted hover:text-ink">
+            <GoGraph size={12} aria-hidden="true" /> New poll or quiz
+          </button>
+        )}
       </div>
+      <PollComposer isOpen={composing} onClose={() => setComposing(false)} workspaceId={workspaceId} userId={userId} onCreated={(p) => setPolls((list) => [...list.filter((x) => x.id !== p.id), p])} />
       </>
       )}
     </div>

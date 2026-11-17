@@ -7,6 +7,7 @@ import compilerRoutes from './routes/compiler.js';
 import miscRoutes from './routes/misc.js';
 import { initCollab } from './collab.js';
 import './services/testWatch.js'; // reruns tests on save in workspaces that watch them
+import './services/reminders.js'; // event reminders, checked every minute
 
 import { createServer } from 'http';
 import { Server } from 'socket.io';

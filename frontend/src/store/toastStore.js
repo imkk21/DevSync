@@ -6,7 +6,10 @@ let nextId = 1;
 // action: { label, onClick } shows a button (e.g. "Open").
 const useToastStore = create((set, get) => ({
   toasts: [],
+  quietUntil: 0, // focus mode: only errors get through until then
+  setQuiet: (quietUntil) => set({ quietUntil }),
   show: (message, { tone = 'info', action, duration = 4500 } = {}) => {
+    if (tone !== 'error' && Date.now() < get().quietUntil) return null;
     const id = nextId++;
     set({ toasts: [...get().toasts.slice(-3), { id, message, tone, action }] });
     if (duration) setTimeout(() => get().dismiss(id), duration);

@@ -2,6 +2,8 @@
 // hue and at least 4.5:1 contrast on its background. The landing page preview
 // reuses SYNTAX so it matches the real editor.
 export const THEMES = { light: 'devsync-light', dark: 'devsync-dark' };
+// Monaco's built-in high-contrast themes, for Settings > Accessibility
+export const HC_THEMES = { light: 'hc-light', dark: 'hc-black' };
 
 export const SYNTAX = {
   light: {

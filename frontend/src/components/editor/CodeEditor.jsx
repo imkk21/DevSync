@@ -6,7 +6,7 @@ import useSettingsStore from '../../store/settingsStore';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import Shortcut, { MOD } from '../ui/Shortcut';
 import useThemeStore from '../../store/themeStore';
-import { THEMES, defineDevSyncThemes } from '../../lib/monacoTheme';
+import { THEMES, HC_THEMES, defineDevSyncThemes } from '../../lib/monacoTheme';
 import { bindModel, showRemoteCursors } from '../../lib/monacoBinding';
 import { socketService } from '../../services/socketService';
 import { toast } from '../../store/toastStore';
@@ -112,6 +112,7 @@ export default function CodeEditor({ fileId, readOnly = false, primary = true, h
   const visibleKey = useEditorStore((s) => [...s.openFiles.map((f) => f.id), s.rightPane?.fileId].join());
   const settings = useSettingsStore();
   const resolvedTheme = useThemeStore((s) => s.resolved);
+  const highContrast = useSettingsStore((s) => s.highContrast);
   const [mounted, setMounted] = useState(null); // { editor, monaco }
   const [bound, setBound] = useState(null); // fileId whose model is linked
   const [slow, setSlow] = useState(false);
@@ -189,6 +190,30 @@ export default function CodeEditor({ fileId, readOnly = false, primary = true, h
           end: model.getOffsetAt(sel.getEndPosition()),
           original: model.getValueInRange(sel),
         });
+      },
+    });
+    editor.addAction({
+      id: 'devsync.task',
+      label: 'Make a task from this line',
+      contextMenuGroupId: 'devsync',
+      contextMenuOrder: 5,
+      run: () => {
+        const model = editor.getModel();
+        const line = editor.getPosition().lineNumber;
+        const offset = model.getOffsetAt({ lineNumber: line, column: 1 });
+        const text = model.getLineContent(line).trim().replace(/^(\/\/|#|--|\/\*+|\*)\s*/, '').replace(/^(TODO|FIXME)[:\s]*/i, '');
+        requestAction({ type: 'task', fileId: fileIdRef.current, line, anchor: session()?.anchorAt(offset) ?? null, title: text.slice(0, 200) });
+      },
+    });
+    editor.addAction({
+      id: 'devsync.flashcard',
+      label: 'Make a flashcard from selection',
+      contextMenuGroupId: 'devsync',
+      contextMenuOrder: 6,
+      run: () => {
+        const { model, sel } = selectionInfo();
+        const code = model.getValueInRange(sel) || model.getLineContent(sel.startLineNumber);
+        requestAction({ type: 'flashcard', back: code.slice(0, 8000) });
       },
     });
     editor.addAction({
@@ -521,7 +546,7 @@ export default function CodeEditor({ fileId, readOnly = false, primary = true, h
           path={fileId}
           language={languageForFile(fileName)}
           defaultValue={useEditorStore.getState().contentOf(fileId)}
-          theme={THEMES[resolvedTheme]}
+          theme={(highContrast ? HC_THEMES : THEMES)[resolvedTheme]}
           beforeMount={defineDevSyncThemes}
           onMount={handleMount}
           keepCurrentModel // models are shared between panes and freed above

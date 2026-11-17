@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { GoArchive, GoColumns, GoDuplicate, GoPencil, GoPin, GoPlus, GoRepo, GoRows, GoSearch, GoSignOut, GoSync, GoTrash, GoX, GoZap } from 'react-icons/go';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { GoArchive, GoColumns, GoDuplicate, GoPencil, GoPin, GoPlus, GoRepo, GoRows, GoSearch, GoSignOut, GoSync, GoTrash, GoX, GoZap, GoCalendar, GoStack } from 'react-icons/go';
 import Navbar from '../components/layout/Navbar';
 import WorkspaceCard, { WorkspaceRow } from '../components/workspace/WorkspaceCard';
 import CreateWorkspaceModal from '../components/workspace/CreateWorkspaceModal';
@@ -15,6 +15,7 @@ import Alert from '../components/ui/Alert';
 import ToggleGroup from '../components/ui/ToggleGroup';
 import useAuthStore from '../store/authStore';
 import useWorkspaceStore from '../store/workspaceStore';
+import { supabase } from '../lib/supabase';
 
 const FILTERS = [
   { id: 'all', label: 'All' },
@@ -50,6 +51,50 @@ function DailyChallenge({ onStart }) {
         ))}
       </div>
     </section>
+  );
+}
+
+// Flashcards due and the next few events across your workspaces. Hidden when there's neither.
+function UpNext({ userId }) {
+  const [due, setDue] = useState(0);
+  const [events, setEvents] = useState([]);
+  useEffect(() => {
+    if (!userId) return;
+    const now = new Date().toISOString();
+    supabase.from('flashcards').select('id', { count: 'exact', head: true }).eq('user_id', userId).lte('due_at', now)
+      .then(({ count }) => setDue(count || 0));
+    supabase.from('events').select('id, title, starts_at, workspace_id, workspaces(name)').gte('ends_at', now).order('starts_at').limit(3)
+      .then(({ data }) => setEvents(data || []));
+  }, [userId]);
+  if (!due && !events.length) return null;
+  const when = (iso) => new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return (
+    <div className="mt-3 grid gap-3 md:grid-cols-[1fr_2fr]">
+      {due > 0 && (
+        <Link to="/review" className="card flex items-center gap-3 p-4 hover:border-line-strong">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand-fg"><GoStack size={18} aria-hidden="true" /></span>
+          <span>
+            <span className="block text-label-lg font-semibold text-ink">{due} {due === 1 ? 'card' : 'cards'} to review</span>
+            <span className="text-body-sm text-ink-muted">A few minutes keeps them fresh</span>
+          </span>
+        </Link>
+      )}
+      {events.length > 0 && (
+        <section aria-label="Upcoming events" className={`card p-4 ${due ? '' : 'md:col-span-2'}`}>
+          <h2 className="flex items-center gap-2 text-label-md text-ink-muted"><GoCalendar size={14} aria-hidden="true" /> Coming up</h2>
+          <ul className="mt-2 space-y-1.5">
+            {events.map((e) => (
+              <li key={e.id}>
+                <Link to={`/editor/${e.workspace_id}?view=events`} className="flex items-baseline justify-between gap-3 text-body-sm hover:underline">
+                  <span className="truncate text-ink">{e.title} <span className="text-ink-subtle">· {e.workspaces?.name}</span></span>
+                  <span className="shrink-0 text-ink-muted">{when(e.starts_at)}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
   );
 }
 
@@ -220,6 +265,7 @@ export default function DashboardPage() {
         </div>
 
         <DailyChallenge onStart={startChallenge} />
+        <UpNext userId={user?.id} />
 
         {/* Toolbar: one row on desktop; on phones the filters drop to their own full-width row */}
         <div className="mt-8 flex flex-wrap items-center gap-3">

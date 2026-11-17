@@ -255,6 +255,15 @@ export default function FileTree({ workspaceId, workspaceName, userId, readOnly 
     }
   };
 
+  // A drawing canvas, stored as a .board file next to the code
+  const newWhiteboard = async () => {
+    let n = 1;
+    while (files.some((f) => !f.parent_id && f.name === `whiteboard-${n}.board`)) n++;
+    const { data, error } = await createFile(workspaceId, `whiteboard-${n}.board`, null, false, userId, '');
+    if (error) toast(error.message, { tone: 'error' });
+    else openFile(data);
+  };
+
   const pickUpload = (input, parentId = null) => {
     uploadParent.current = parentId;
     input.current?.click();
@@ -364,6 +373,7 @@ export default function FileTree({ workspaceId, workspaceName, userId, readOnly 
             items={[
               { label: 'Upload files…', icon: GoUpload, hidden: readOnly, onSelect: () => pickUpload(fileInput) },
               { label: 'Upload a folder…', icon: GoUpload, hidden: readOnly, onSelect: () => pickUpload(folderInput) },
+              { label: 'New whiteboard', icon: GoPencil, hidden: readOnly, onSelect: newWhiteboard },
               { label: 'Download as zip', icon: GoDownload, onSelect: () => downloadZip(workspaceName) },
             ]}
           />

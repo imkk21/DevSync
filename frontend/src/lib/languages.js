@@ -22,6 +22,7 @@ const OTHER = [
   { id: 'json', label: 'JSON', ext: 'json', color: '#292929' },
   { id: 'markdown', label: 'Markdown', ext: 'md', color: '#083FA1' },
   { id: 'mermaid', label: 'Mermaid diagram', ext: 'mmd', color: '#FF3670' },
+  { id: 'whiteboard', label: 'Whiteboard', ext: 'board', color: '#6E40C9' },
 ];
 
 const PLAINTEXT = { id: 'plaintext', label: 'Plain text', ext: 'txt', color: '#D2D9D4' };

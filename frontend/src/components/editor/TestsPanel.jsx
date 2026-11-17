@@ -8,6 +8,7 @@ import Button from '../ui/Button';
 import Switch from '../ui/Switch';
 import { api } from '../../lib/api';
 import useWorkspaceStore from '../../store/workspaceStore';
+import { requestAction } from './CodeEditor';
 
 function useTests(file) {
   const [tests, setTests] = useState(null);
@@ -33,7 +34,9 @@ function useTests(file) {
   return [tests, setTests];
 }
 
-function TestCase({ test, index, result, readOnly, onChange, onDelete }) {
+const gotOf = (result) => result.output?.compile_output || result.output?.stderr || result.output?.stdout || `(no output) ${result.output?.status?.description || ''}`;
+
+function TestCase({ test, index, result, readOnly, onChange, onDelete, fileName }) {
   const [draft, setDraft] = useState(test);
   useEffect(() => { setDraft(test); }, [test.input, test.expected_output]);
   const field = (key, label) => (
@@ -71,9 +74,27 @@ function TestCase({ test, index, result, readOnly, onChange, onDelete }) {
       </div>
       {result && !result.passed && (
         <div className="mt-2">
-          <span className="text-label-sm text-ink-muted">Got</span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-label-sm text-ink-muted">Got</span>
+            <button
+              type="button"
+              className="text-label-sm text-ink-muted hover:text-ink hover:underline"
+              onClick={() => requestAction({
+                type: 'flashcard',
+                source: 'test',
+                front: `What should ${fileName || 'the program'} print for this input?
+
+${test.input || '(no input)'}`,
+                back: `${test.expected_output}
+
+(It printed: ${gotOf(result).trim().slice(0, 1000)})`,
+              })}
+            >
+              Save as flashcard
+            </button>
+          </div>
           <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded-md border border-danger/25 bg-danger-soft px-3 py-2 font-mono text-code-sm text-ink">
-            {result.output?.compile_output || result.output?.stderr || result.output?.stdout || `(no output) ${result.output?.status?.description || ''}`}
+            {gotOf(result)}
           </pre>
         </div>
       )}
@@ -155,7 +176,7 @@ export default function TestsPanel({ readOnly }) {
       ) : (
         <ol className="mt-3 space-y-2">
           {tests.map((t, i) => (
-            <TestCase key={t.id} test={t} index={i} result={results[t.id]} readOnly={readOnly} onChange={(patch) => update(t.id, patch)} onDelete={() => remove(t.id)} />
+            <TestCase key={t.id} test={t} index={i} result={results[t.id]} readOnly={readOnly} fileName={activeFile?.name} onChange={(patch) => update(t.id, patch)} onDelete={() => remove(t.id)} />
           ))}
         </ol>
       )}

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import useAuthStore from './store/authStore';
+import useSettingsStore from './store/settingsStore';
 import { PageLoader } from './components/ui/LoadingSpinner';
 
 // Each page is its own chunk, so the landing page doesn't download the editor
@@ -14,6 +15,8 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const WallPage = lazy(() => import('./pages/WallPage'));
 const MoviePage = lazy(() => import('./pages/MoviePage'));
 const EmbedPage = lazy(() => import('./pages/EmbedPage'));
+const ReviewPage = lazy(() => import('./pages/ReviewPage'));
+const PortfolioPage = lazy(() => import('./pages/PortfolioPage'));
 const Toaster = lazy(() => import('./components/ui/Toaster')); // keeps the icon set out of the first download
 
 function ProtectedRoute({ children }) {
@@ -43,8 +46,27 @@ function PublicRoute({ children }) {
   return children;
 }
 
+// Settings > Accessibility, applied to the whole app
+function useAccessibility() {
+  const { readableFont, highContrast, textScale, reduceMotion } = useSettingsStore();
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('a11y-font', readableFont);
+    root.classList.toggle('a11y-contrast', highContrast);
+    root.classList.toggle('a11y-motion', reduceMotion);
+    root.style.zoom = textScale === 100 ? '' : String(textScale / 100); // type sizes are px, so zoom the whole page
+    if (readableFont && !document.getElementById('a11y-font')) {
+      const link = Object.assign(document.createElement('link'), {
+        id: 'a11y-font', rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap',
+      });
+      document.head.appendChild(link);
+    }
+  }, [readableFont, highContrast, textScale, reduceMotion]);
+}
+
 export default function App() {
   const { initialize } = useAuthStore();
+  useAccessibility();
 
   useEffect(() => {
     initialize();
@@ -87,7 +109,13 @@ export default function App() {
             <SettingsPage />
           </ProtectedRoute>
         } />
+        <Route path="/review" element={
+          <ProtectedRoute>
+            <ReviewPage />
+          </ProtectedRoute>
+        } />
         <Route path="/p/:token" element={<PublicPage />} />
+        <Route path="/u/:username" element={<PortfolioPage />} />
         <Route path="/movie/:token/:fileId" element={<MoviePage />} />
         <Route path="/embed/:token" element={<EmbedPage />} />
 

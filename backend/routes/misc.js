@@ -5,12 +5,14 @@ import { previewInvite, acceptInvite, claimInvites, getPublicWorkspace } from '.
 import { restoreVersion, deleteAccount } from '../controllers/fileController.js';
 import { acceptSuggestion, rejectSuggestion } from '../controllers/reviewController.js';
 import { getPublicReplay, runPublic } from '../controllers/classroomController.js';
+import { getPortfolio } from '../controllers/peopleController.js';
 
 const router = Router();
 
 router.get('/public/:token', getPublicWorkspace); // no sign-in
 router.get('/public/:token/replay/:fileId', getPublicReplay); // no sign-in
 router.post('/public/:token/run', runPublic); // no sign-in, rate limited per visitor
+router.get('/u/:username', getPortfolio); // no sign-in
 router.post('/invites/claim', authMiddleware, claimInvites);
 router.get('/invites/:token', authMiddleware, previewInvite);
 router.post('/invites/:token/accept', authMiddleware, acceptInvite);

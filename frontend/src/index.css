@@ -300,3 +300,56 @@
 .suggestion-range { background: rgb(9 105 218 / 0.08); }
 .dark .suggestion-marker::before { background: #4493F8; }
 .dark .suggestion-range { background: rgb(68 147 248 / 0.12); }
+
+/* Wiki pages (WikiView): rendered Markdown in the app's type scale */
+.wiki-prose { color: rgb(var(--ink)); font-size: 16px; line-height: 1.7; }
+.wiki-prose > * + * { margin-top: 1em; }
+.wiki-prose h1 { font-size: 28px; line-height: 1.3; font-weight: 600; }
+.wiki-prose h2 { font-size: 21px; line-height: 1.3; font-weight: 600; margin-top: 1.6em; padding-bottom: .3em; border-bottom: 1px solid rgb(var(--line)); }
+.wiki-prose h3 { font-size: 17px; font-weight: 600; margin-top: 1.4em; }
+.wiki-prose a { color: rgb(var(--brand-fg)); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.wiki-prose ul { list-style: disc; padding-left: 1.4em; }
+.wiki-prose ol { list-style: decimal; padding-left: 1.4em; }
+.wiki-prose li + li { margin-top: .3em; }
+.wiki-prose code { font-family: "Monaspace Neon", ui-monospace, monospace; font-size: 13px; background: rgb(var(--canvas-subtle)); border: 1px solid rgb(var(--line)); border-radius: 4px; padding: .1em .35em; }
+.wiki-prose pre { background: rgb(var(--canvas-subtle)); border: 1px solid rgb(var(--line)); border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
+.wiki-prose pre code { background: none; border: 0; padding: 0; }
+.wiki-prose blockquote { border-left: 3px solid rgb(var(--line-strong)); padding-left: 1em; color: rgb(var(--ink-muted)); }
+.wiki-prose table { border-collapse: collapse; }
+.wiki-prose th, .wiki-prose td { border: 1px solid rgb(var(--line)); padding: 6px 12px; }
+.wiki-prose img, .wiki-prose svg { max-width: 100%; height: auto; }
+.wiki-prose hr { border: 0; border-top: 1px solid rgb(var(--line)); }
+
+/* Portfolio activity squares */
+.heat-0 { fill: rgb(var(--canvas-muted)); }
+.heat-1 { fill: rgb(var(--brand) / 0.3); }
+.heat-2 { fill: rgb(var(--brand) / 0.5); }
+.heat-3 { fill: rgb(var(--brand) / 0.75); }
+.heat-4 { fill: rgb(var(--brand)); }
+
+/* Accessibility (Settings > Accessibility; classes set on <html> by App) */
+.a11y-font body, .a11y-font .font-sans { font-family: 'Atkinson Hyperlegible', 'Mona Sans', system-ui, sans-serif; }
+.a11y-contrast {
+  --ink-muted: 36 41 47;
+  --ink-subtle: 66 74 83;
+  --line: 140 149 159;
+  --line-strong: 87 96 106;
+  --line-emphasis: 36 41 47;
+  --brand-fg: 4 77 26;
+}
+.dark.a11y-contrast {
+  --ink: 255 255 255;
+  --ink-muted: 220 228 224;
+  --ink-subtle: 190 200 195;
+  --line: 110 122 116;
+  --line-strong: 150 162 156;
+  --line-emphasis: 210 220 215;
+  --brand-fg: 120 230 150;
+}
+.a11y-contrast :focus-visible { outline-width: 3px; }
+.a11y-motion *, .a11y-motion *::before, .a11y-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}

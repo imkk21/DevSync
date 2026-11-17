@@ -7,7 +7,9 @@ import useDismiss from '../../hooks/useDismiss';
 import { toast } from '../../store/toastStore';
 import { timeAgo } from '../workspace/WorkspaceCard';
 
-const VERB = { mention: 'mentioned you', reply: 'replied to your comment', invite: '' };
+const VERB = { mention: 'mentioned you', reply: 'replied to your comment' };
+// These carry their whole sentence in `body` ("added you to X", "accepted your suggestion…")
+const SENTENCE = new Set(['invite', 'suggestion']);
 
 // Mentions, replies and invites, live. Clicking one goes where it happened.
 export default function NotificationBell({ className = '' }) {
@@ -41,7 +43,12 @@ export default function NotificationBell({ className = '' }) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, ({ new: row }) => {
         setItems((list) => [row, ...list.filter((n) => n.id !== row.id)]);
         loadNames([row]);
-        const message = { invite: 'You were added to a workspace', reply: `New reply: ${row.body}` }[row.type] || `You were mentioned: ${row.body}`;
+        const message = {
+          invite: 'You were added to a workspace',
+          reply: `New reply: ${row.body}`,
+          event: `📅 ${row.body}`,
+          suggestion: `Your suggestion was ${row.body.startsWith('accepted') ? 'accepted' : 'declined'}`,
+        }[row.type] || `You were mentioned: ${row.body}`;
         toast(message, row.link ? { action: { label: 'Open', onClick: () => navigate(row.link) } } : undefined);
       })
       .subscribe();
@@ -99,9 +106,13 @@ export default function NotificationBell({ className = '' }) {
                   <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.read ? 'bg-transparent' : 'bg-brand'}`} aria-hidden="true" />
                   <span className="min-w-0">
                     <span className="block text-body-sm text-ink">
-                      <span className="font-medium">{names[n.actor_id] || 'Someone'}</span> {VERB[n.type] ?? ''}{n.type === 'invite' ? n.body : ''}
+                      {n.type === 'event' ? (
+                        <span className="font-medium">📅 {n.body}</span>
+                      ) : (
+                        <><span className="font-medium">{names[n.actor_id] || 'Someone'}</span> {VERB[n.type] ?? ''}{SENTENCE.has(n.type) ? n.body : ''}</>
+                      )}
                     </span>
-                    {n.type !== 'invite' && <span className="mt-0.5 block truncate text-body-sm text-ink-muted">{n.body}</span>}
+                    {!SENTENCE.has(n.type) && n.type !== 'event' && <span className="mt-0.5 block truncate text-body-sm text-ink-muted">{n.body}</span>}
                     <span className="mt-0.5 block text-label-sm text-ink-subtle">{timeAgo(n.created_at)}</span>
                   </span>
                 </button>

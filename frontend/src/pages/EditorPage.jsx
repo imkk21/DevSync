@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   GoAlert, GoArrowLeft, GoCheck, GoCloudOffline, GoComment, GoCommentDiscussion, GoCommandPalette, GoEye,
   GoFileDirectory, GoHistory, GoPersonAdd, GoPlay, GoPulse, GoScreenFull, GoSearch, GoSidebarCollapse,
-  GoSidebarExpand, GoX, GoBookmark, GoDownload, GoDuplicate, GoGear, GoVideo, GoStopwatch, GoPeople, GoRepoForked, GoMortarBoard,
+  GoSidebarExpand, GoX, GoBookmark, GoDownload, GoDuplicate, GoGear, GoVideo, GoStopwatch, GoPeople, GoRepoForked, GoMortarBoard, GoPaperclip,
 } from 'react-icons/go';
 import useAuthStore from '../store/authStore';
 import useEditorStore from '../store/editorStore';
@@ -33,6 +33,31 @@ import ReactionPicker from '../components/editor/ReactionPicker';
 import SuggestModal from '../components/editor/SuggestModal';
 import ForkMergeModal from '../components/editor/ForkMergeModal';
 import ClassroomBar from '../components/editor/ClassroomBar';
+import Announcer from '../components/editor/Announcer';
+import { FocusButton, CheckinCard, useLateNightNudge } from '../components/editor/TeamHealth';
+import FlashcardModal from '../components/ui/FlashcardModal';
+import { celebrate } from '../lib/celebrate';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
+import { languageForFile } from '../lib/languages';
+import { withoutAmd } from '../lib/diagrams';
+
+// Big, separate chunks: only downloaded when used
+// Excalidraw's bundled libraries trip over Monaco's AMD loader, so load it with that hidden
+const WhiteboardEditor = lazy(() => withoutAmd(() => import('../components/editor/WhiteboardEditor')));
+const TasksView = lazy(() => import('../components/views/TasksView'));
+const WikiView = lazy(() => import('../components/views/WikiView'));
+const EventsView = lazy(() => import('../components/views/EventsView'));
+const AssetsPanel = lazy(() => import('../components/editor/AssetsPanel'));
+const InsightsView = lazy(() => import('../components/views/InsightsView'));
+
+const VIEWS = [
+  { id: 'code', label: 'Code' },
+  { id: 'tasks', label: 'Tasks' },
+  { id: 'wiki', label: 'Wiki' },
+  { id: 'events', label: 'Events' },
+  { id: 'insights', label: 'Insights', owner: true },
+];
+const ViewLoading = () => <div className="flex h-full items-center justify-center"><LoadingSpinner size="lg" className="text-brand" /></div>;
 import { api } from '../lib/api';
 import InviteMemberModal from '../components/workspace/InviteMemberModal';
 import NotificationBell from '../components/layout/NotificationBell';
@@ -140,6 +165,7 @@ const PANELS = [
   { id: 'comments', label: 'Comments', icon: GoComment },
   { id: 'chat', label: 'Chat', icon: GoCommentDiscussion },
   { id: 'activity', label: 'Activity', icon: GoPulse },
+  { id: 'assets', label: 'Shared files', icon: GoPaperclip },
 ];
 
 // Split pane: a second editor on any open file
@@ -188,6 +214,9 @@ export default function EditorPage() {
   const [commentDraft, setCommentDraft] = useState(null);
   const [reacting, setReacting] = useState(null); // { fileId, line, offset }
   const [suggesting, setSuggesting] = useState(null); // { fileId, start, end, original, line }
+  const [view, setView] = useState('code'); // code | tasks | wiki
+  const [taskDraft, setTaskDraft] = useState(null); // from "Make a task from this line"
+  const [cardDraft, setCardDraft] = useState(null); // new flashcard from selected code or a failed test
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(() => !isSmallScreen());
   const sidebar = useResizable({ storageKey: 'devsync:sidebar-width', initial: 272, min: 200, max: 480 });
@@ -205,6 +234,8 @@ export default function EditorPage() {
     [members],
   );
   const nameOf = (id) => people.find((p) => p.id === id)?.name || 'Someone';
+  const views = VIEWS.filter((v) => !v.owner || isOwner);
+  useLateNightNudge();
 
   // On phones the sidebar is an overlay: get it out of the way once a file is picked
   useEffect(() => {
@@ -241,6 +272,12 @@ export default function EditorPage() {
     if (loading) return;
     const fileId = searchParams.get('file');
     const panel = searchParams.get('panel');
+    const linkedView = searchParams.get('view');
+    if (VIEWS.some((v) => v.id === linkedView)) {
+      setView(linkedView);
+      setSearchParams({}, { replace: true });
+      return;
+    }
     if (!fileId && !panel) return;
     const file = files.find((f) => f.id === fileId);
     if (file) useEditorStore.getState().openFile(file);
@@ -321,6 +358,7 @@ export default function EditorPage() {
             toast(`${who(payload.brokenBy)} last edit broke ${payload.broken.length} ${payload.broken.length === 1 ? 'test' : 'tests'} in ${file?.name || 'a file'}`, { tone: 'error' });
           } else if (payload.fixed) {
             toast(`All tests pass again in ${file?.name || 'a file'}`, { tone: 'success' });
+            celebrate();
           }
         }
         if (event === 'signal') {
@@ -385,6 +423,11 @@ export default function EditorPage() {
         setSidebarPanel('comments');
       } else if (detail.type === 'suggest') {
         setSuggesting(detail);
+      } else if (detail.type === 'task') {
+        setTaskDraft(detail);
+        setView('tasks');
+      } else if (detail.type === 'flashcard') {
+        setCardDraft({ ...detail, workspaceId: useWorkspaceStore.getState().currentWorkspace?.id, source: detail.source || 'code' });
       } else if (detail.type === 'react') {
         setReacting(detail);
       } else if (detail.type === 'ping') {
@@ -477,6 +520,15 @@ export default function EditorPage() {
       ...others.map((u) => ({ id: `follow-${u.id}`, label: following === u.id ? `Stop following ${u.display_name}` : `Follow ${u.display_name || u.email}`, run: () => follow(following === u.id ? null : u.id) })),
       ...(isOwner && driver ? others.map((u) => ({ id: `drive-${u.id}`, label: `Hand the wheel to ${u.display_name || u.email}`, run: () => setPair(u.id) })) : []),
       { id: 'wall', label: 'Class wall: see every student', hidden: !(isOwner && currentWorkspace?.is_classroom), run: () => navigate(`/editor/${workspaceId}/wall`) },
+      { id: 'view-tasks', label: 'Open the task board', run: () => setView('tasks') },
+      { id: 'view-wiki', label: 'Open the wiki', run: () => setView('wiki') },
+      { id: 'view-events', label: 'Open events', run: () => setView('events') },
+      { id: 'assets', label: 'Shared files', run: () => openPanel('assets') },
+      { id: 'view-code', label: 'Back to the code', hidden: view === 'code', run: () => setView('code') },
+      { id: 'task-line', label: 'Make a task from this line', hidden: !activeFile || !canEdit, run: () => runEditorAction('devsync.task') },
+      { id: 'flashcard', label: 'Make a flashcard from selection', hidden: !activeFile, run: () => runEditorAction('devsync.flashcard') },
+      { id: 'view-insights', label: 'Open insights', hidden: !isOwner, run: () => setView('insights') },
+      { id: 'review', label: 'Review flashcards', run: () => navigate('/review') },
       { id: 'graph', label: 'Show the call graph', hidden: !activeFile, run: () => setRightPane({ type: 'graph' }) },
       { id: 'interview', label: currentWorkspace?.interview_started_at ? 'End interview' : 'Start interview mode', hidden: !isOwner, run: () => setInterview(!currentWorkspace?.interview_started_at) },
       { id: 'settings', label: 'Editor settings', shortcut: [MOD, ','], run: () => setModal('settings') },
@@ -488,7 +540,7 @@ export default function EditorPage() {
       { id: 'shortcuts', label: 'Keyboard shortcuts', shortcut: ['?'], run: () => setModal('shortcuts') },
       { id: 'tour', label: 'Show the tour again', run: () => setModal('tour') },
     ];
-  }, [activeFile, activeFileId, readOnly, runnable, rightPane, zen, sidebarOpen, canEdit, isOwner, driver, rotation, presence, following, user?.id, currentWorkspace, modal, inkMode, authorship]);
+  }, [activeFile, activeFileId, readOnly, runnable, rightPane, zen, sidebarOpen, canEdit, isOwner, driver, rotation, presence, following, user?.id, currentWorkspace, modal, inkMode, authorship, view]);
 
   // Keyboard shortcuts that work everywhere, including inside the editor
   useEffect(() => {
@@ -569,6 +621,20 @@ export default function EditorPage() {
               </span>
             )}
           </nav>
+          <div role="tablist" aria-label="Workspace view" className="ml-2 hidden shrink-0 items-center rounded-md border border-line-strong bg-canvas-subtle p-[2px] md:flex">
+            {views.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                role="tab"
+                aria-selected={view === v.id}
+                onClick={() => setView(v.id)}
+                className={`h-7 rounded-[4px] px-2.5 text-label-md transition-colors ${view === v.id ? 'bg-canvas text-ink shadow-[0_0_0_1px_rgb(var(--line-strong))]' : 'text-ink-muted hover:text-ink'}`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
           {!canEdit && (
             <span className="badge ml-1 shrink-0" title="You can't edit here, but you can suggest changes: select code, right-click, Suggest a change">
               <GoEye size={12} aria-hidden="true" /> View only
@@ -612,6 +678,7 @@ export default function EditorPage() {
                 <GoMortarBoard size={14} /> Class wall
               </Link>
             )}
+            <FocusButton workspaceId={workspaceId} />
             <NotificationBell className="hidden sm:block" />
             <ThemeMenu className="hidden md:block" />
             <DropdownMenu label="More" items={moreItems} />
@@ -636,7 +703,7 @@ export default function EditorPage() {
       )}
 
       <div className="relative flex min-h-0 flex-1">
-        {sidebarOpen && !zen && (
+        {sidebarOpen && !zen && view === 'code' && (
           <>
             {/* Tap outside to close on phones */}
             <button
@@ -676,15 +743,55 @@ export default function EditorPage() {
                 {sidebarPanel === 'files' && <FileTree workspaceId={workspaceId} workspaceName={currentWorkspace.name} userId={user?.id} readOnly={readOnly} />}
                 {sidebarPanel === 'search' && <SearchPanel readOnly={readOnly} />}
                 {sidebarPanel === 'comments' && <CommentsPanel userId={user?.id} people={people} draft={commentDraft} onDraftDone={() => setCommentDraft(null)} canEdit={canEdit} />}
-                {sidebarPanel === 'chat' && <ChatPanel workspaceId={workspaceId} userId={user?.id} people={people} />}
+                {sidebarPanel === 'chat' && <ChatPanel workspaceId={workspaceId} userId={user?.id} people={people} canEdit={canEdit} />}
                 {sidebarPanel === 'activity' && <ActivityPanel workspaceId={workspaceId} people={people} />}
+                {sidebarPanel === 'assets' && <Suspense fallback={<ViewLoading />}><AssetsPanel workspaceId={workspaceId} readOnly={!canEdit} /></Suspense>}
               </div>
               <div {...sidebar.handleProps} aria-label="Resize side panel" className="resize-handle-x hidden md:block" />
             </aside>
           </>
         )}
 
-        <main className="flex min-w-0 flex-1 flex-col">
+        {view !== 'code' && (
+          <main className="min-w-0 flex-1">
+            <Suspense fallback={<ViewLoading />}>
+              {view === 'tasks' && (
+                <TasksView
+                  workspaceId={workspaceId}
+                  userId={user?.id}
+                  people={people}
+                  readOnly={!canEdit}
+                  draft={taskDraft}
+                  onDraftDone={() => setTaskDraft(null)}
+                  onOpenCode={(task) => {
+                    setView('code');
+                    const index = socketService.collab?.get(task.file_id)?.resolveAnchor(task.anchor);
+                    const text = index != null ? useEditorStore.getState().contentOf(task.file_id) : '';
+                    const line = index != null ? text.slice(0, index).split('\n').length : task.line || 1;
+                    useEditorStore.getState().revealAt(task.file_id, { line });
+                  }}
+                />
+              )}
+              {view === 'insights' && isOwner && <InsightsView workspaceId={workspaceId} />}
+              {view === 'events' && (
+                <EventsView workspaceId={workspaceId} userId={user?.id} people={people} readOnly={!canEdit} onJoin={() => setView('code')} />
+              )}
+              {view === 'wiki' && (
+                <WikiView
+                  workspaceId={workspaceId}
+                  userId={user?.id}
+                  readOnly={!canEdit}
+                  onEdit={(page) => {
+                    setView('code');
+                    useEditorStore.getState().openFile(page);
+                    setRightPane({ type: 'preview' });
+                  }}
+                />
+              )}
+            </Suspense>
+          </main>
+        )}
+        <main className={`min-w-0 flex-1 flex-col ${view === 'code' ? 'flex' : 'hidden'}`}>
           {!zen && currentWorkspace.fork_of && (
             <div className="flex h-9 shrink-0 items-center gap-2 border-b border-line bg-canvas-subtle px-3 text-body-sm text-ink-muted">
               <GoRepoForked size={14} aria-hidden="true" />
@@ -702,7 +809,11 @@ export default function EditorPage() {
           )}
           <div className="flex min-h-0 flex-1">
             <div className="min-w-0 flex-1">
-              {activeFileId ? (
+              {activeFileId && languageForFile(activeFile?.name) === 'whiteboard' ? (
+                <Suspense fallback={<ViewLoading />}>
+                  <WhiteboardEditor key={activeFileId} fileId={activeFileId} readOnly={readOnly} />
+                </Suspense>
+              ) : activeFileId ? (
                 <CodeEditor fileId={activeFileId} readOnly={readOnly} highlightPastes={!!(currentWorkspace.interview_started_at || currentWorkspace.classroom_id)} />
               ) : <EmptyState />}
             </div>
@@ -754,6 +865,9 @@ export default function EditorPage() {
       {currentWorkspace.fork_of && <ForkMergeModal isOpen={modal === 'merge'} onClose={() => setModal(null)} workspaceId={workspaceId} />}
       {palette && <CommandPalette mode={palette} onClose={() => setPalette(null)} commands={commands} />}
       {modal === 'tour' && <Tour onDone={() => setModal(null)} />}
+      <FlashcardModal request={cardDraft} userId={user?.id} onClose={() => setCardDraft(null)} />
+      <CheckinCard workspaceId={workspaceId} userId={user?.id} memberCount={members.length} />
+      <Announcer userId={user?.id} />
     </div>
   );
 }

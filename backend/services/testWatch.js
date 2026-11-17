@@ -71,6 +71,12 @@ async function run(fileId, workspaceId, editorId) {
     lastResults.set(fileId, new Map(results.map((r) => [r.id, r.passed])));
     const passed = results.filter((r) => r.passed).length;
     await recordScore(workspaceId, passed, results.length);
+    // Tasks linked to this file that finish when its tests pass
+    if (passed === results.length) {
+      await supabaseAdmin.from('tasks')
+        .update({ status: 'done', completed_at: new Date().toISOString() })
+        .eq('workspace_id', workspaceId).eq('file_id', fileId).eq('done_when_tests_pass', true).neq('status', 'done');
+    }
     broadcastToWorkspace(workspaceId, 'tests:watch', {
       fileId, results, passed, total: results.length, at: Date.now(),
       broken, brokenBy: broken.length ? editorId : null, fixed: !!fixed, fixedBy: fixed ? editorId : null,
